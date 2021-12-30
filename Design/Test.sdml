@@ -1,0 +1,7 @@
+<component>
+	<refs>
+		<component id="top" url="/Design/Top.sdml"/>
+	</refs>
+	<refs>
+	</refs>
+</component>
