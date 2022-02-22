@@ -60,6 +60,27 @@ export class SourceScript {
 		this.current = -1;
 	}
 
+	get_ScriptSlice(start, end, ret = true) {
+		let linescount = this.script.split('\n').length
+		let lines = this.script.split('\n').splice(start, end - start + 1);
+		let linecountlen = (linescount).toString().length
+		let str = ""//`${start.toString()}:${end.toString()}\n`;
+
+		function match(str, size) {
+			let ans = ''
+			for (let i = str.length; i < size; i++) {
+				ans += ' '
+			}
+			return ans + str
+		}
+		for (let i = 0; i < lines.length; i++) {
+			let line = lines[i];
+			str += `${match((start + i + 1).toString(), linecountlen)} | ${line}${i === lines.length - 1 && !ret ? '' : '\n'}`;
+		}
+
+		return str;
+	}
+
 	get_ScriptPortion(start, end, linemark = "=", color, ret = true) {
 		if (color !== undefined)
 			linemark = `<a style='color: ${color};'>${linemark}</a>`
@@ -129,13 +150,15 @@ export class SourceScript {
 
 const TOKENS = {
 	TK_UNKNOW: "",
-	TK_INT: "整数",
-	TK_FLOAT: "浮点数",
-	TK_STRING: "字符串",
-	TK_IDENTIFIER: "标识符",
+	TK_INT: "int",
+	TK_FLOAT: "float",
+	TK_STRING: "string",
+	TK_BOOL: "bool",
+	TK_IDENTIFIER: "identifier",
+	TK_ID: "id",
 	TK_ADD: "+",
 	TK_MINUS: "-",
-	TK_MULTIPLY: "*",
+	TK_MULTIPIY: "*",
 	TK_DIVIDE: "/",
 	TK_MOD: "%",
 	TK_DOT: ".",
@@ -145,18 +168,16 @@ const TOKENS = {
 	TK_RSQR: "]",
 	TK_LBRACE: "{",
 	TK_RBRACE: "}",
-	TK_KEYWORD: "关键字",
+	TK_KEYWORD: "keyword",
 	TK_ASSIGN: "=",
 	TK_EQUAL: "==",
-	TK_NOTEQUAL: "<>",
+	TK_NOTEQUAL: "!=",
 	TK_LESS: "<",
 	TK_GREATER: ">",
 	TK_LESSE: "<=",
 	TK_GREATERE: ">=",
 	TK_TO: "->",
 	TK_TYPEDEFINE: ":",
-	TK_BECOME: ":=",
-	TK_END: ";",
 	TK_NEWLINE: "\\n",
 	TK_TAB: "\\t",
 	TK_COMMA: ",",
@@ -182,9 +203,14 @@ export class BaseError {
 	constructor(type = "Error", msg = "", start, end, info) {
 		this.type = type;
 		this.message = msg;
+		this.start = start?.clone();
+		this.end = end?.clone();
+		this.info = info;
+	}
+
+	set_Portion(start, end) {
 		this.start = start.clone();
 		this.end = end.clone();
-		this.info = info;
 	}
 }
 
@@ -196,6 +222,20 @@ export class Lexer {
 		this.last_pos = new ScriptPosition(this.sourcescript.script_name);
 		this.tokens = [];
 		this.errors = [];
+		this.colors = {
+			string: '#92C073',
+			number: '#D19A63',
+			keyword: '#C678DD',
+			type: 'tomato',
+			identifier: '#E06C75',
+			operator: '#53B3C1',
+			comment: 'grey',
+		};
+		this.syntaxhighlightstr = '';
+	}
+
+	tint(str, type) {
+		return `<span style="color: ${this.colors[type]};">${str}</span>`
 	}
 
 	is_EOF() {
@@ -218,7 +258,7 @@ export class Lexer {
 	}
 
 	is_IdentifierChar(char) {
-		const KEY = ("\'\"~!@#$%^&*()+-{}[]\\|;:,.<>?/~`= ").split('');
+		const KEY = ("\'\"~!@#$%^&*()+-{}[]\\|;:,.<>?/~`=").split('');
 		return !this.is_SpaceChar(char) && !KEY.includes(char);
 	}
 
@@ -248,11 +288,9 @@ export class Lexer {
 			this.current_pos.newline();
 	}
 
-	peek(n = 1) {
-		return this.sourcescript.peek(n);
+	peek() {
+		return this.sourcescript.peek();
 	}
-
-	// customize
 
 	get_Number() {
 		let number = "";
@@ -262,7 +300,6 @@ export class Lexer {
 		while (!this.is_EOF() && (this.is_NumberChar(this.current) || this.current === '.')) {
 			position = this.current_pos.clone();
 			if (this.current === '.') {
-				if (!this.is_NumberChar(this.peek())) break;
 				if (dot_count === 1)
 					break;
 				dot_count++;
@@ -271,13 +308,10 @@ export class Lexer {
 			else {
 				number += this.current;
 			}
-			if (this.peek() === '.' && !this.is_NumberChar(this.peek(2))) {
-				this.advance();
-				break;
-			}
 			this.advance();
 		}
 
+		this.syntaxhighlightstr += this.tint(number, 'number')
 		if (dot_count === 0)
 			this.tokens.push(new Token('TK_INT', parseInt(number), this.last_pos, position));
 		else
@@ -294,14 +328,26 @@ export class Lexer {
 			this.advance();
 		}
 
-		const KEYWORD = ["begin", "int", "real", "string", "call", "const", "do", "end", "if", "else", "odd", "procedure", "read", "then", "var", "while", "write"];
+		const KEYWORD = ["class", "def", "react", "func", "var", "const", "new", "int", "float", "string", "bool", "if", , "elseif", "else", "for", "while", "match", "case", "return", "break", "continue", 'and', 'or', 'not'];
 
-		let keyword = identifier.toLowerCase()
 
-		if (KEYWORD.includes(keyword))
-			this.tokens.push(new Token('TK_KEYWORD_' + identifier.toUpperCase(), keyword, this.last_pos, position));
-		else
+
+		if (KEYWORD.includes(identifier)) {
+			this.tokens.push(new Token('TK_KEYWORD', identifier, this.last_pos, position));
+			this.syntaxhighlightstr += this.tint(identifier, 'keyword');
+		}
+		else if (identifier === 'false') {
+			this.tokens.push(new Token('TK_BOOL', identifier, this.last_pos, position));
+			this.syntaxhighlightstr += this.tint(identifier, 'number');
+		}
+		else if (identifier === 'true') {
+			this.tokens.push(new Token('TK_BOOL', identifier, this.last_pos, position));
+			this.syntaxhighlightstr += this.tint(identifier, 'number');
+		}
+		else {
 			this.tokens.push(new Token('TK_IDENTIFIER', identifier, this.last_pos, position));
+			this.syntaxhighlightstr += this.tint(identifier, 'identifier');
+		}
 	}
 
 	get_String() {
@@ -348,10 +394,14 @@ export class Lexer {
 			this.advance();
 		}
 
-		if (ended)
+		if (ended) {
 			this.tokens.push(new Token("TK_STRING", str, this.last_pos, position));
-		else
+			this.syntaxhighlightstr += this.tint(`"${str}"`, 'string');
+		}
+		else {
 			this.errors.push(new BaseError("MissingExpextedError", "\"", this.last_pos, position));
+			this.syntaxhighlightstr += this.tint(`"${str}`, 'string');
+		}
 	}
 
 	get_String2() {
@@ -398,10 +448,14 @@ export class Lexer {
 			this.advance();
 		}
 
-		if (ended)
+		if (ended) {
 			this.tokens.push(new Token("TK_STRING", str, this.last_pos, position));
-		else
-			this.errors.push(new BaseError("MissingExpextedError", "'", this.last_pos, position));
+			this.syntaxhighlightstr += this.tint(`'${str}'`, 'string');
+		}
+		else {
+			this.errors.push(new BaseError("MissingExpextedError", "\'", this.last_pos, position));
+			this.syntaxhighlightstr += this.tint(`'${str}`, 'string');
+		}
 	}
 
 	skip_Comment() {
@@ -412,6 +466,7 @@ export class Lexer {
 			this.advance();
 		}
 
+		this.syntaxhighlightstr += this.tint(comment + '\n', 'comment')
 		// LexerCommentError *errorptr = new LexerCommentError(this.last_pos, this.current_pos, comment);
 		// this.errors.push(errorptr);
 		this.advance();
@@ -424,116 +479,128 @@ export class Lexer {
 			// space
 			if (this.current === ' ') {
 				this.advance();
+				this.syntaxhighlightstr += '&nbsp;';
 			}
 			// space
 			else if (this.current === '\t') {
 				// this.tokens.push(new Token("TK_TAB", "\t", this.last_pos, this.current_pos));
 				this.advance();
+				this.syntaxhighlightstr += '\t';
 			}
 			// newline
 			else if (this.current === '\n') {
 				// this.tokens.push(new Token("TK_NEWLINE", "\n", this.last_pos, this.current_pos));
 				this.advance();
+				this.syntaxhighlightstr += '\n';
 			}
 			else if (this.current === ',') {
 				this.tokens.push(new Token("TK_COMMA", ",", this.last_pos, this.current_pos));
 				this.advance();
+				this.syntaxhighlightstr += ',';
 			}
 			else if (this.current === '.') {
 				this.tokens.push(new Token("TK_DOT", ".", this.last_pos, this.current_pos));
 				this.advance();
+				this.syntaxhighlightstr += '.';
 			}
 			else if (this.current === '"') {
 				this.get_String();
 			}
-			// else if (this.current === '\'') {
-			// 	this.get_String2();
-			// }
+			else if (this.current === '\'') {
+				this.get_String2();
+			}
 			// + - -> * /
 			else if (this.current === '+') {
 				this.tokens.push(new Token("TK_ADD", "+", this.last_pos, this.current_pos));
 				this.advance();
+				this.syntaxhighlightstr += this.tint('+', 'operator')
 			}
 			else if (this.current === '-') {
 				// ->
 				if (this.peek() === '>') {
 					this.advance();
 					this.tokens.push(new Token("TK_TO", "->", this.last_pos, this.current_pos));
+					this.syntaxhighlightstr += '->'
 				}
 				// -
-				else
+				else {
 					this.tokens.push(new Token("TK_MINUS", "-", this.last_pos, this.current_pos));
+					this.syntaxhighlightstr += this.tint('-', 'operator')
+				}
 				this.advance();
 			}
 			else if (this.current === '*') {
-				this.tokens.push(new Token("TK_MULTIPLY", "*", this.last_pos, this.current_pos));
+				this.tokens.push(new Token("TK_MULTIPIY", "*", this.last_pos, this.current_pos));
 				this.advance();
+				this.syntaxhighlightstr += this.tint('%', 'operator')
 			}
 			else if (this.current === '/') {
 				this.tokens.push(new Token("TK_DIVIDE", "/", this.last_pos, this.current_pos));
 				this.advance();
+				this.syntaxhighlightstr += this.tint('%', 'operator')
 			}
-			// else if (this.current === '%') {
-			// 	this.tokens.push(new Token("TK_MOD", "%", this.last_pos, this.current_pos));
-			// 	this.advance();
-			// }
+			else if (this.current === '%') {
+				this.tokens.push(new Token("TK_MOD", "%", this.last_pos, this.current_pos));
+				this.advance();
+				this.syntaxhighlightstr += this.tint('%', 'operator')
+			}
+			else if (this.current === '^') {
+				this.tokens.push(new Token("TK_POW", "^", this.last_pos, this.current_pos));
+				this.advance();
+				this.syntaxhighlightstr += this.tint('^', 'operator')
+			}
 			else if (this.current === ':') {
-				let character = this.peek()
-				if (character === '=') {
-					this.advance();
-					this.tokens.push(new Token("TK_BECOME", ":=", this.last_pos, this.current_pos));
-				}
-				// -
-				else
-					this.tokens.push(new Token("TK_TYPEDEFINE", ":", this.last_pos, this.current_pos));
-				// this.errors.push(new BaseError("InvalidCharError", `: will always followed by '=' but now is '${character}'`, this.last_pos, this.current_pos));
+				this.tokens.push(new Token("TK_TYPEDEFINE", ":", this.last_pos, this.current_pos));
 				this.advance();
-			}
-			else if (this.current === ';') {
-				this.tokens.push(new Token("TK_END", ";", this.last_pos, this.current_pos));
-				this.advance();
+				this.syntaxhighlightstr += ':'
 			}
 			else if (this.current === '=') {
 				// ===
 				if (this.peek() === '=') {
 					this.advance();
 					this.tokens.push(new Token("TK_EQUAL", "==", this.last_pos, this.current_pos));
+					this.syntaxhighlightstr += this.tint('==', 'operator')
 				}
 				// =
-				else
+				else {
 					this.tokens.push(new Token("TK_ASSIGN", "=", this.last_pos, this.current_pos));
+					this.syntaxhighlightstr += this.tint('=', 'operator')
+				}
 				this.advance();
 			}
 
 			else if (this.current === '[') {
 				this.tokens.push(new Token("TK_LSQR", "[", this.last_pos, this.current_pos));
 				this.advance();
+				this.syntaxhighlightstr += '['
 			}
 			else if (this.current === ']') {
 				this.tokens.push(new Token("TK_RSQR", "]", this.last_pos, this.current_pos));
 				this.advance();
+				this.syntaxhighlightstr += ']'
 			}
 			else if (this.current === '(') {
 				this.tokens.push(new Token("TK_LCIR", "(", this.last_pos, this.current_pos));
 				this.advance();
+				this.syntaxhighlightstr += '('
 			}
 			else if (this.current === ')') {
 				this.tokens.push(new Token("TK_RCIR", ")", this.last_pos, this.current_pos));
 				this.advance();
+				this.syntaxhighlightstr += ')'
 			}
 			else if (this.current === '<') {
 				// ===
 				if (this.peek() === '=') {
 					this.advance();
 					this.tokens.push(new Token("TK_LESSE", "<=", this.last_pos, this.current_pos));
-				}
-				else if (this.peek() === '>') {
-					this.advance();
-					this.tokens.push(new Token("TK_NOTEQUAL", "<>", this.last_pos, this.current_pos));
+					this.syntaxhighlightstr += '&lt;='
 				}
 				// =
-				else
+				else {
 					this.tokens.push(new Token("TK_LESS", "<", this.last_pos, this.current_pos));
+					this.syntaxhighlightstr += '&lt;'
+				}
 				this.advance();
 			}
 			else if (this.current === '>') {
@@ -541,33 +608,40 @@ export class Lexer {
 				if (this.peek() === '=') {
 					this.advance();
 					this.tokens.push(new Token("TK_GREATERE", ">=", this.last_pos, this.current_pos));
+					this.syntaxhighlightstr += '&gt;='
 				}
 				// =
-				else
+				else {
 					this.tokens.push(new Token("TK_GREATER", ">", this.last_pos, this.current_pos));
+					this.syntaxhighlightstr += '&gt;'
+				}
 				this.advance();
 			}
-			// else if (this.current === '{') {
-			// 	this.tokens.push(new Token("TK_LBRACE", "{", this.last_pos, this.current_pos));
-			// 	this.advance();
-			// }
-			// else if (this.current === '}') {
-			// 	this.tokens.push(new Token("TK_RBRACE", "}", this.last_pos, this.current_pos));
-			// 	this.advance();
-			// }
-			// else if (this.current === '!') {
-			// 	// !=
-			// 	if (this.peek() === '=') {
-			// 		this.tokens.push(new Token("TK_NOTEQUAL", "!=", this.last_pos, this.current_pos));
-			// 		this.advance();
-			// 	}
-			// 	else {
-			// 		let character = "";
-			// 		character += this.current;
-			// 		this.errors.push(new BaseError("InvalidCharError", character, this.last_pos, this.current_pos));
-			// 	}
-			// 	this.advance();
-			// }
+			else if (this.current === '{') {
+				this.tokens.push(new Token("TK_LBRACE", "{", this.last_pos, this.current_pos));
+				this.advance();
+				this.syntaxhighlightstr += '{'
+			}
+			else if (this.current === '}') {
+				this.tokens.push(new Token("TK_RBRACE", "}", this.last_pos, this.current_pos));
+				this.advance();
+				this.syntaxhighlightstr += '}'
+			}
+			else if (this.current === '!') {
+				// !=
+				if (this.peek() === '=') {
+					this.tokens.push(new Token("TK_NOTEQUAL", "!=", this.last_pos, this.current_pos));
+					this.advance();
+					this.syntaxhighlightstr += this.tint('!=', 'operator')
+				}
+				else {
+					let character = "";
+					character += this.current;
+					this.errors.push(new BaseError("InvalidCharError", character, this.last_pos, this.current_pos));
+					this.syntaxhighlightstr += '!'
+				}
+				this.advance();
+			}
 			else if (this.current === '#') {
 				this.skip_Comment();
 			}
@@ -582,6 +656,7 @@ export class Lexer {
 			else {
 				let character = "";
 				character += this.current;
+				this.syntaxhighlightstr += character
 				this.errors.push(new BaseError("InvalidCharError", character, this.last_pos, this.current_pos));
 				this.advance();
 			}
@@ -967,11 +1042,12 @@ export class Language {
 			this.registe(key, ebnf[key]);
 		}
 		this.check();
-		if (this.$PassChecking && bnf) {
+		if (this.$PassChecking) {
 			this.get_Epsilon();
 			this.get_First();
 			this.get_Follow();
-			this.get_Select();
+			if (bnf)
+				this.get_Select();
 		}
 	}
 
@@ -1110,7 +1186,6 @@ export class Language {
 			let [empty, fs] = l.$get_First(match);
 			if (empty) {
 				fs.union(l.$Follow[term])
-
 			}
 			return fs;
 		}
@@ -1172,6 +1247,14 @@ export class Language {
 			})
 		}
 		return table;
+	}
+
+	toLR0Table() {
+
+	}
+
+	toSLR0Table() {
+
 	}
 }
 
@@ -1325,7 +1408,7 @@ export class Once_or_None extends Match {
 	}
 
 	get_First(language) {
-		return [true, this.subs.get_First(language)]
+		return [true, this.subs.get_First(language)[1]]
 	}
 }
 
@@ -1364,22 +1447,22 @@ export class More_or_None extends Match {
 
 		if (erroridx === nextidx) {
 			let ast = this.match_func(this, undefined)
-			if (ast !== undefined) {
-				ast[1].$start = tokens[$idx]
-				ast[1].$end = tokens[nextidx - 1]
-				ast[1].$startidx = $idx
-				ast[1].$endidx = nextidx - 1
-			}
+			// if (ast !== undefined) {
+			// 	ast[1].$start = tokens[$idx]
+			// 	ast[1].$end = tokens[nextidx - 1]
+			// 	ast[1].$startidx = $idx
+			// 	ast[1].$endidx = nextidx - 1
+			// }
 			return [true, nextidx, ast, undefined, undefined];
 		}
 		else {
 			let ast = this.match_func(this, undefined)
-			if (ast !== undefined) {
-				ast[1].$start = tokens[$idx]
-				ast[1].$end = tokens[nextidx - 1]
-				ast[1].$startidx = $idx
-				ast[1].$endidx = nextidx - 1
-			}
+			// if (ast !== undefined) {
+			// 	ast[1].$start = tokens[$idx]
+			// 	ast[1].$end = tokens[nextidx - 1]
+			// 	ast[1].$startidx = $idx
+			// 	ast[1].$endidx = nextidx - 1
+			// }
 			return [false, nextidx, ast, error, erroridx];
 		}
 	}
@@ -1393,7 +1476,7 @@ export class More_or_None extends Match {
 	}
 
 	get_First(language) {
-		return [true, this.subs.get_First(language)]
+		return [true, this.subs.get_First(language)[1]]
 	}
 }
 
@@ -1565,7 +1648,7 @@ export class MatchTerm extends Match {
 	}
 
 	toString() {
-		return `<${this.term_name}>`;
+		return `< ${this.term_name} >`;
 	}
 
 	match(tokens, idx = 0, language) {
@@ -1641,190 +1724,122 @@ export class Skip extends Match {
 	}
 }
 
-export const PL0 = function () {
-	return new Language("PL/0", {
-		'constdef': () => {
-			return new Match([
-				new MatchToken("TK_IDENTIFIER", undefined, (match, token) => { return ['value', { type: 'identifier', value: token.value }] }),
-				new MatchToken("TK_ASSIGN", undefined),
-				new ChooseOne([
-					new MatchTerm('exp'),
-					new MatchTerm('array')
-				])
-			], (match, token) => {
-				return ['constdef', {
-					type: 'constdef',
-					identifier: match.nodes[0][1].value,
-					value: match.nodes[1][1]
-				}]
-			})
-		},
+Array.prototype.tab = function () {
+	return this.join("\n").split('\n').map((i) => "    " + i).join('\n')
+}
 
-		'const': () => {
-			return new Match([
-				new MatchToken("TK_KEYWORD_CONST"),
-				new MatchTerm("constdef"),
-				new More_or_None([
-					new Match([
-						new MatchToken("TK_COMMA", undefined),
-						new MatchTerm("constdef")
-					], (match, token) => {
-						return ['constdef', match.nodes[0]]
-					})
-				], (match, token) => { return ['constdefs', match.nodes] }),
-				new MatchToken("TK_END", undefined)
-			], (match, token) => {
-				let arr = [match.nodes[0][1]]
-				arr = arr.concat(match.nodes[1][1].map((i) => {
-					return i[1][1]
-				}))
-				return ['const', {
-					type: 'const',
-					consts: arr
-				}]
-			})
-		},
-
-		'type': () => {
-			return new Match([
-				new ChooseOne([
-					new MatchToken('TK_KEYWORD_INT', undefined, (match, token) => { return ['type', { type: 'type', value: 'int' }] }),
-					new MatchToken('TK_KEYWORD_REAL', undefined, (match, token) => { return ['type', { type: 'type', value: 'real' }] }),
-					new MatchToken('TK_KEYWORD_STRING', undefined, (match, token) => { return ['type', { type: 'type', value: 'string' }] }),
-				]),
-				new Once_or_None([
-					new Match([
-						new MatchToken("TK_LSQR", undefined),
-						new MatchToken("TK_INT", undefined, (match, token) => { return ['value', { type: 'value', datatype: 'int', value: token.value }] }),
-						new MatchToken("TK_RSQR", undefined),
-					], (match, token) => {
-						return match.nodes[0]
-					})
-				], true)
-			], (match, token) => {
-				if (match.nodes[1][0] === 'null') return match.nodes[0]
-				else return ['type', { type: 'arraytype', value: match.nodes[0][1].value, count: match.nodes[1][1].value }]
-			})
-		},
-
-		'vardef': () => {
-			return new Match([
-				new MatchToken("TK_IDENTIFIER", undefined, (match, token) => { return ['value', { type: 'identifier', value: token.value }] }),
-				new Match([
-					new MatchToken("TK_TYPEDEFINE", undefined),
-					new MatchTerm('type')
-				], (match, token) => {
-					return match.nodes[0]
-				}),
-				new Once_or_None([
-					new Match([
-						new MatchToken("TK_ASSIGN", undefined),
-						new ChooseOne([
-							new MatchTerm('exp'),
-							new MatchTerm('array')
-						])
-					], (match, token) => {
-						return match.nodes[0]
-					})
-				], true)
-			], (match, token) => {
-				return ['vardef', {
-					type: 'vardef',
-					typedef: match.nodes[1][1],
-					identifier: match.nodes[0][1].value,
-					default: match.nodes[2][1]
-				}]
-			})
-		},
-
-		'var': () => {
-			return new Match([
-				new MatchToken("TK_KEYWORD_VAR"),
-				new MatchTerm("vardef"),
-				new More_or_None([
-					new Match([
-						new MatchToken("TK_COMMA", undefined),
-						new MatchTerm("vardef")
-					], (match, token) => {
-						return ['identifier', match.nodes[0]]
-					})
-				], (match, token) => { return ['identifiers', match.nodes] }),
-				new MatchToken("TK_END", undefined)
-			], (match, token) => {
-				let arr = [match.nodes[0][1]]
-				arr = arr.concat(match.nodes[1][1].map((i) => {
-					return i[1][1]
-				}))
-				return ['var', {
-					type: 'var',
-					vars: arr
-				}]
-			})
-		},
-
-		'fact': () => {
+export const SunLang = function () {
+	return new Language("sunlang", {
+		'base': () => {
 			return new ChooseOne([
-				new MatchToken("TK_INT", undefined, (match, token) => { return ['value', { type: 'value', datatype: 'int', value: token.value }] }),
-				new MatchToken("TK_FLOAT", undefined, (match, token) => { return ['value', { type: 'value', datatype: 'real', value: token.value }] }),
-				new MatchToken("TK_STRING", undefined, (match, token) => { return ['value', { type: 'value', datatype: 'string', value: token.value }] }),
+				new MatchToken("TK_INT", undefined, (match, token) => { return ['value', { type: 'value', datatype: { type: 'datatype', datatype: 'base', value: 'int' }, value: token.value }] }),
+				new MatchToken("TK_FLOAT", undefined, (match, token) => { return ['value', { type: 'value', datatype: { type: 'datatype', datatype: 'base', value: 'float' }, value: token.value }] }),
+				new MatchToken("TK_STRING", undefined, (match, token) => { return ['value', { type: 'value', datatype: { type: 'datatype', datatype: 'base', value: 'string' }, value: token.value }] }),
+				new MatchToken("TK_BOOL", undefined, (match, token) => { return ['value', { type: 'value', datatype: { type: 'datatype', datatype: 'base', value: 'bool' }, value: token.value }] }),
+				new MatchToken("TK_IDENTIFIER", undefined, (match, token) => { return ['value', { type: 'identifier', value: token.value }] }),
+				new MatchTerm('tuple'),
+				// new MatchTerm('funccall'),
+				// new MatchTerm('dot'),
+				new MatchTerm('array'),
 				new Match([
-					new MatchToken("TK_IDENTIFIER", undefined, (match, token) => { return ['value', { type: 'identifier', value: token.value }] }),
-					new Once_or_None([
-						new Match([
-							new MatchToken("TK_LSQR", undefined),
-							new MatchTerm('exp'),
-							new MatchToken("TK_RSQR", undefined)], (match, tokens) => {
-								return match.nodes[0]
-							})
-					], true)
-				], (match, token) => {
-					if (match.nodes[1][0] === 'null') {
-						return match.nodes[0]
-					}
-					// console.log(">>>>>>>", match.nodes)
-					return ['indexof', {
-						type: 'indexof',
-						identifier: match.nodes[0][1],
-						index: match.nodes[1][1]
-					}]
-				}),
-				new Match([
-					new MatchToken("TK_LCIR", undefined),
-					new MatchTerm("exp"),
-					new MatchToken("TK_RCIR", undefined)
+					new MatchToken("TK_LCIR", undefined, (match, token) => { return undefined }),
+					new MatchTerm('expression'),
+					new MatchToken("TK_RCIR", undefined, (match, token) => { return undefined }),
 				], (match, token) => {
 					return match.nodes[0]
-				}),
-				new Match([
-					new ChooseOne([
-						new MatchToken('TK_KEYWORD_INT', undefined, (match, token) => { return ['type', { type: 'type', value: 'int' }] }),
-						new MatchToken('TK_KEYWORD_REAL', undefined, (match, token) => { return ['type', { type: 'type', value: 'real' }] }),
-						new MatchToken('TK_KEYWORD_STRING', undefined, (match, token) => { return ['type', { type: 'type', value: 'string' }] })
-					]),
-					new MatchToken("TK_LCIR", undefined),
-					new MatchTerm("exp"),
-					new MatchToken("TK_RCIR", undefined)
-				], (match, token) => {
-					console.log(">>>>", match.nodes)
-					return ["convert", {
-						type: 'convert',
-						value: match.nodes[1][1],
-						to: match.nodes[0][1]
-					}]
 				})
 			])
 		},
 
+		'dot': () => {
+			return new Match([
+				new MatchTerm('base'),
+				new More_or_None([
+					new ChooseOne([
+						new Match([
+							new MatchToken("TK_DOT", undefined, (match, token) => { return ['op', { op: "." }] }),
+							new MatchToken("TK_IDENTIFIER", undefined, (match, token) => { return ['value', { type: 'identifier', value: token.value }] }),
+						], (match, token) => { return ['binop', match.nodes] }),
+						new Match([
+							new MatchToken('TK_LSQR'),
+							new MatchToken('TK_INT', undefined, (match, token) => { return ['length', { type: 'value', datatype: { type: 'datatype', datatype: 'base', value: 'int' }, value: token.value }] }),
+							new MatchToken('TK_RSQR')
+						], (match, token) => { return ['idx', [['op', { op: "[]" }], match.nodes[0]]] })
+					])
+				], (match, token) => { return ['binoptree', match.nodes] })
+			], (match, token) => {
+				let tree = match.nodes[1][1];
+				let sub = match.nodes[0][1];
+				let node = sub;
+				if (tree.length === 0) {
+					return match.nodes[0];
+				}
+				tree.forEach((op) => {
+					let value = op[1][1][1];
+					node = { type: 'binop', value: op[1][0][1].op, sub: [sub, value] };
+					sub = node;
+				})
+				return ['binop', node]
+			})
+		},
+
+		'funccall': () => {
+			return new Match([
+				new MatchTerm('dot'),
+				new Once_or_None([
+					new ChooseOne([
+						new Match([
+							new MatchToken('TK_LCIR'),
+							new Once_or_None([
+								new MatchTerm('expression')
+							]),
+							new MatchToken('TK_RCIR')
+						], (match, token) => {
+							return ['tuple', { type: 'tuple', list: match.nodes[0] ? [match.nodes[0][1]] : [] }]
+						}),
+						new MatchTerm('tuple')
+
+					])
+				])
+			], (match, token) => {
+				if (match.nodes[0] && match.nodes[1]) {
+					return ['funccall', { type: 'funccall', identifier: match.nodes[0][1], arguments: match.nodes[1][1].list }]
+				}
+				if (match.nodes[0]) {
+					return match.nodes[0]
+				}
+				return undefined
+			})
+		},
+
+		"facter": () => {
+			return new Match([
+				new Once_or_None([new ChooseOne([
+					new MatchToken("TK_ADD", undefined, (match, token) => { return ['type', { op: "+" }] }),
+					new MatchToken("TK_MINUS", undefined, (match, token) => { return ['type', { op: "-" }] }),
+					new MatchToken("TK_KEYWORD", 'not', (match, token) => { return ['type', { op: "!" }] }),
+				])]),
+				new MatchTerm('funccall')
+			], (match, token) => {
+				if (match.nodes[0] && match.nodes[1])
+					return ['uniop', { type: 'uniop', value: match.nodes[0][1].op, sub: [match.nodes[1][1]] }]
+				else {
+					return match.nodes[0]
+				}
+			})
+		},
+
 		"term": () => {
 			return new Match([
-				new MatchTerm('fact'),
+				new MatchTerm('facter'),
 				new More_or_None([
 					new Match([
 						new ChooseOne([
-							new MatchToken("TK_MULTIPLY", undefined, (match, token) => { return ['op', { type: 'binop', value: "*" }] }),
-							new MatchToken("TK_DIVIDE", undefined, (match, token) => { return ['op', { type: 'binop', value: "/" }] })
+							new MatchToken("TK_MULTIPIY", undefined, (match, token) => { return ['op', { op: "*" }] }),
+							new MatchToken("TK_DIVIDE", undefined, (match, token) => { return ['op', { op: "/" }] }),
+							new MatchToken("TK_MOD", undefined, (match, token) => { return ['op', { op: "%" }] }),
 						]),
-						new MatchTerm('fact')
+						new MatchTerm('facter')
 					], (match, token) => { return ['binop', match.nodes] })
 				], (match, token) => { return ['binoptree', match.nodes] })
 			], (match, token) => {
@@ -1836,39 +1851,21 @@ export const PL0 = function () {
 				}
 				tree.forEach((op) => {
 					let value = op[1][1][1];
-					node = { type: 'binop', value: op[1][0][1].value, sub: [sub, value], $start: sub.$start, $end: value.$end, $startidx: sub.$startidx, $endidx: value.$endidx };
+					node = { type: 'binop', value: op[1][0][1].op, sub: [sub, value] };
 					sub = node;
 				})
 				return ['binop', node]
 			})
 		},
 
-		"expfront": () => {
+		"operation": () => {
 			return new Match([
-				new Once_or_None([
-					new ChooseOne([
-						new MatchToken("TK_ADD", undefined, (match, token) => { return ['type', { type: 'binop', value: "+" }] }),
-						new MatchToken("TK_MINUS", undefined, (match, token) => { return ['type', { type: 'binop', value: "-" }] })
-					])
-				]),
-				new MatchTerm('term')
-			], (match, token) => {
-				if (match.nodes[0] && match.nodes[1])
-					return ['uniop', { type: 'uniop', value: match.nodes[0][1].value, sub: [match.nodes[1][1]] }]
-				else {
-					return match.nodes[0]
-				}
-			})
-		},
-
-		"exp": () => {
-			return new Match([
-				new MatchTerm('expfront'),
+				new MatchTerm('term'),
 				new More_or_None([
 					new Match([
 						new ChooseOne([
-							new MatchToken("TK_ADD", undefined, (match, token) => { return ['op', { type: 'binop', value: "+" }] }),
-							new MatchToken("TK_MINUS", undefined, (match, token) => { return ['op', { type: 'binop', value: "-" }] }),
+							new MatchToken("TK_ADD", undefined, (match, token) => { return ['op', { op: "+" }] }),
+							new MatchToken("TK_MINUS", undefined, (match, token) => { return ['op', { op: "-" }] }),
 						]),
 						new MatchTerm('term')
 					], (match, token) => { return ['binop', match.nodes] })
@@ -1882,857 +1879,668 @@ export const PL0 = function () {
 				}
 				tree.forEach((op) => {
 					let value = op[1][1][1];
-					node = { type: 'binop', value: op[1][0][1].value, sub: [sub, value], $start: sub.$start, $end: value.$end, $startidx: sub.$startidx, $endidx: value.$endidx };
+					node = { type: 'binop', value: op[1][0][1].op, sub: [sub, value] };
 					sub = node;
 				})
 				return ['binop', node]
 			})
 		},
 
-		'array': () => {
+		"expression": () => {
+			return new MatchTerm('logic')
+		},
+
+		"compare": () => {
 			return new Match([
-				new MatchToken("TK_LSQR", undefined),
-				new MatchTerm("exp"),
+				new MatchTerm('operation'),
 				new More_or_None([
 					new Match([
-						new MatchToken("TK_COMMA", undefined),
-						new MatchTerm("exp")
-					], (match, token) => {
-						return ['expression', match.nodes[0]]
-					})
-				], (match, token) => { return ['expressions', match.nodes] }),
-				new MatchToken("TK_RSQR", undefined),
+						new ChooseOne([
+							new MatchToken("TK_EQUAL", undefined, (match, token) => { return ['op', { op: "==" }] }),
+							new MatchToken("TK_NOTEQUAL", undefined, (match, token) => { return ['op', { op: "!=" }] }),
+							new MatchToken("TK_LESS", undefined, (match, token) => { return ['op', { op: "<" }] }),
+							new MatchToken("TK_GREATER", undefined, (match, token) => { return ['op', { op: ">" }] }),
+							new MatchToken("TK_LESSE", undefined, (match, token) => { return ['op', { op: "<=" }] }),
+							new MatchToken("TK_GREATERE", undefined, (match, token) => { return ['op', { op: ">=" }] }),
+						]),
+						new MatchTerm('operation')
+					], (match, token) => { return ['binop', match.nodes] })
+				], (match, token) => { return ['binoptree', match.nodes] })
 			], (match, token) => {
-				// console.log(match.nodes)
-				let arr = [match.nodes[0][1]]
-				arr = arr.concat(match.nodes[1][1].map((i) => {
-					return i[1][1]
-				}))
-				return ['array', {
-					type: 'array',
-					expressions: arr,
-					count: arr.length
-				}]
-			})
-		},
-
-		'cmp': () => {
-			return new ChooseOne([
-				new MatchToken("TK_EQUAL", undefined, (match, token) => { return ['value', { type: 'binop', value: '==' }] }),
-				new MatchToken("TK_NOTEQUAL", undefined, (match, token) => { return ['value', { type: 'binop', value: '!=' }] }),
-				new MatchToken("TK_LESS", undefined, (match, token) => { return ['value', { type: 'binop', value: '<' }] }),
-				new MatchToken("TK_GREATER", undefined, (match, token) => { return ['value', { type: 'binop', value: '>' }] }),
-				new MatchToken("TK_LESSE", undefined, (match, token) => { return ['value', { type: 'binop', value: '<=' }] }),
-				new MatchToken("TK_GREATERE", undefined, (match, token) => { return ['value', { type: 'binop', value: '>=' }] }),
-			])
-		},
-
-		"cmpexp": () => {
-			return new ChooseOne([
-				new Match([
-					new MatchTerm("exp"),
-					new MatchTerm("cmp"),
-					new MatchTerm("exp")
-				], (match, token) => {
-					return ['binop', {
-						type: 'binop',
-						value: match.nodes[1][1].value,
-						sub: [
-							match.nodes[0][1],
-							match.nodes[2][1]
-						]
-					}]
-				}),
-				new Match([
-					new MatchToken("TK_KEYWORD_ODD"),
-					new MatchTerm("exp")
-				], (match, token) => {
-					return ['binop', {
-						type: 'uniop',
-						value: 'not',
-						sub: [
-							match.nodes[0][1]
-						]
-					}]
-				}),
-			])
-		},
-
-		'states': () => {
-			return new ChooseOne([
-				new MatchTerm('assign'),
-				new MatchTerm('if'),
-				new MatchTerm('while'),
-				new MatchTerm('call'),
-				new MatchTerm('read'),
-				new MatchTerm('write'),
-				new MatchTerm('block'),
-				// new Skip()
-			])
-		},
-
-		'statment': () => {
-			return new Once_or_None([
-				new MatchTerm("states")
-			])
-		},
-
-		'lvalue': () => {
-			return new Match([
-				new MatchToken("TK_IDENTIFIER", undefined, (match, token) => { return ['value', { type: 'identifier', value: token.value }] }),
-				new Once_or_None([
-					new Match([
-						new MatchToken("TK_LSQR", undefined),
-						new MatchTerm('exp'),
-						new MatchToken("TK_RSQR", undefined)], (match, tokens) => {
-							return match.nodes[0]
-						})
-				], true)
-			], (match, token) => {
-				if (match.nodes[1][0] === 'null') {
-					return match.nodes[0]
+				let tree = match.nodes[1][1];
+				let sub = match.nodes[0][1];
+				let node = sub;
+				if (tree.length === 0) {
+					return match.nodes[0];
 				}
-				// console.log(">>>>>>>", match.nodes)
-				return ['indexof', {
-					type: 'indexof',
-					identifier: match.nodes[0][1],
-					index: match.nodes[1][1]
-				}]
+				tree.forEach((op) => {
+					let value = op[1][1][1];
+					node = { type: 'binop', value: op[1][0][1].op, sub: [sub, value] };
+					sub = node;
+				})
+				return ['binop', node]
 			})
 		},
 
 		"assign": () => {
 			return new Match([
-				new MatchTerm("lvalue"),
-				new MatchToken("TK_BECOME", undefined),
-				new MatchTerm('exp')
+				new MatchTerm('compare'),
+				new More_or_None([
+					new Match([
+						new MatchToken("TK_ASSIGN", undefined, (match, token) => { return ['op', { type: 'op', op: "=" }] }),
+						new MatchTerm('compare')
+					], (match, token) => { return ['binop', match.nodes] })
+				], (match, token) => { return ['binoptree', match.nodes] })
 			], (match, token) => {
-				return ['assign', {
-					type: 'assign',
-					identifier: match.nodes[0][1],
-					expression: match.nodes[1][1]
-				}]
+				let tree = match.nodes[1][1];
+				let sub = match.nodes[0][1];
+				let node = sub;
+				if (tree.length === 0) {
+					return match.nodes[0];
+				}
+				tree.forEach((op) => {
+					let value = op[1][1][1];
+					node = { type: 'binop', value: op[1][0][1].op, sub: [sub, value] };
+					sub = node;
+				})
+				return ['binop', node]
 			})
 		},
 
-		'if': () => {
+		"logic": () => {
 			return new Match([
-				new MatchToken("TK_KEYWORD_IF"),
-				new MatchTerm('cmpexp'),
-				new MatchToken("TK_KEYWORD_THEN"),
-				new MatchTerm('statment'),
-				new Once_or_None([
+				new MatchTerm('assign'),
+				new More_or_None([
 					new Match([
-						new MatchToken("TK_KEYWORD_ELSE"),
-						new MatchTerm('statment')
+						new ChooseOne([
+							new MatchToken("TK_KEYWORD", 'and', (match, token) => { return ['op', { op: "&&" }] }),
+							new MatchToken("TK_KEYWORD", 'or', (match, token) => { return ['op', { op: "||" }] }),
+						]),
+						new MatchTerm('assign')
+					], (match, token) => { return ['binop', match.nodes] })
+				], (match, token) => { return ['binoptree', match.nodes] })
+			], (match, token) => {
+				let tree = match.nodes[1][1];
+				let sub = match.nodes[0][1];
+				let node = sub;
+				if (tree.length === 0) {
+					return match.nodes[0];
+				}
+				tree.forEach((op) => {
+					let value = op[1][1][1];
+					node = { type: 'binop', value: op[1][0][1].op, sub: [sub, value] };
+					sub = node;
+				})
+				return ['binop', node]
+			})
+		},
+
+		'atomtype': () => {
+			return new ChooseOne([
+				new MatchTerm('tupletype'),
+				new MatchTerm('arguments'),
+				new MatchTerm('transtype'),
+				new MatchToken("TK_IDENTIFIER", undefined, (match, token) => { return ['datatype', { type: 'datatype', datatype: 'identifier', value: token.value }] }),
+				new MatchToken("TK_KEYWORD", "int", (match, token) => { return ['datatype', { type: 'datatype', datatype: 'base', value: "int" }] }),
+				new MatchToken("TK_KEYWORD", "float", (match, token) => { return ['datatype', { type: 'datatype', datatype: 'base', value: "float" }] }),
+				new MatchToken("TK_KEYWORD", "string", (match, token) => { return ['datatype', { type: 'datatype', datatype: 'base', value: "string" }] }),
+				new MatchToken("TK_KEYWORD", "bool", (match, token) => { return ['datatype', { type: 'datatype', datatype: 'base', value: "bool" }] }),
+				new Match([
+					new MatchToken('TK_LCIR'),
+					new MatchTerm('type'),
+					new MatchToken('TK_RCIR'),
+				], (match, token) => {
+					return match.nodes[0]
+				})
+			])
+		},
+
+		'type': () => {
+			return new Match([
+				new MatchTerm('atomtype'),
+				new More_or_None([
+					new Match([
+						new MatchToken('TK_LSQR'),
+						new Once_or_None([
+							new MatchToken('TK_INT', undefined, (match, token) => { return ['length', { type: 'length', value: token.value }] })
+						]),
+						new MatchToken('TK_RSQR'),
 					], (match, token) => {
-						if (match.nodes[0][1] === null) return undefined
+						return ['array', match.nodes]
+					})
+				], (match, token) => {
+					return ['arraylist', match.nodes]
+				})
+			], (match, token) => {
+				if (match.nodes[0] && !match.nodes[1]) {
+					return ['datatype', match.nodes[0][1]]
+				}
+				else if (match.nodes[0] && match.nodes[1]) {
+					if (match.nodes[1][1].length > 0) {
+						let type = match.nodes[0][1]
+						match.nodes[1][1].reverse().forEach((i) => {
+							type = { type: 'datatype', datatype: 'arraytype', value: type, count: i[1][0] !== undefined ? i[1][0][1].value : null }
+						})
+						return ['datatype', type]
+					}
+					return ['datatype', match.nodes[0][1]]
+				}
+				return undefined
+			})
+		},
+
+		'arguments': () => {
+			return new ChooseOne([
+				new Match([
+					new MatchToken('TK_LCIR'),
+					new MatchToken('TK_RCIR')
+				], (match, token) => {
+					return ['arguments', { type: 'arguments', list: [] }]
+				}),
+				new Match([
+					new MatchToken('TK_LCIR'),
+					new MatchToken("TK_IDENTIFIER", undefined, (match, token) => { return ['identifier', { type: 'identifier', value: token.value }] }),
+					new Match([
+						new MatchToken("TK_TYPEDEFINE"),
+						new MatchTerm('type')
+					], (match, token) => {
+
+						return match.nodes[0]
+					}),
+					new More_or_None([
+						new Match([
+							new MatchToken("TK_COMMA"),
+							new MatchToken("TK_IDENTIFIER", undefined, (match, token) => { return ['identifier', { type: 'identifier', value: token.value }] }),
+
+							new Match([
+								new MatchToken("TK_TYPEDEFINE"),
+								new MatchTerm('type')
+							], (match, token) => {
+								return match.nodes[0]
+							}),
+						], (match, token) => {
+							return [undefined, [match.nodes[0], match.nodes[1]]]
+						})
+					], (match, token) => {
+						console.log(match.nodes)
+						return ['arglist', match.nodes.map(i => i[1])]
+					}),
+					new MatchToken('TK_RCIR')
+				], (match, token) => {
+					let list = []
+					if (match.nodes[0])
+						list = [{ type: 'argdef', identifier: match.nodes[0][1].value, datatype: match.nodes[1] && match.nodes[1][0] !== "arglist" ? match.nodes[1][1] : null }]
+					if (match.nodes[1] && match.nodes[1][0] === "arglist") {
+						match.nodes[1][1].forEach((i) => {
+							list.push({ type: 'argdef', identifier: i[0][1].value, datatype: i[1] ? i[1][1] : null })
+						})
+					}
+					if (match.nodes[2]) {
+						match.nodes[2][1].forEach((i) => {
+							list.push({ type: 'argdef', identifier: i[0][1].value, datatype: i[1] ? i[1][1] : null })
+						})
+					}
+					console.log(">>>>>>>")
+					return ['arguments', { type: 'arguments', list: list }]
+				})
+			])
+		},
+
+		'tupletype': () => {
+			return new Match([
+				new MatchToken('TK_LCIR'),
+				new MatchTerm('type'),
+				new MatchToken("TK_COMMA"),
+				new MatchTerm('type'),
+				new More_or_None([
+					new Match([
+						new MatchToken("TK_COMMA"),
+						new MatchTerm('type')
+					], (match, token) => {
 						return match.nodes[0]
 					})
-				], true)
+				], (match, token) => {
+					return ['typelist', match.nodes]
+				}),
+				new MatchToken('TK_RCIR')
 			], (match, token) => {
-				return ['if', {
-					type: 'if',
-					expression: match.nodes[0][1],
-					sub: [match.nodes[1][1]],
-					else: [match.nodes[2] === undefined ? null : match.nodes[2][1]]
-				}]
+				let list = []
+				// console.log(">>> tupletype", match.nodes)
+				if (match.nodes[0] && match.nodes[1])
+					list = [match.nodes[0][1], match.nodes[1][1]]
+				if (match.nodes[2] && match.nodes[2][0] === "typelist") {
+					match.nodes[2][1].forEach((i) => {
+						list.push(i[1])
+					})
+				}
+				return ['tupledef', { type: 'datatype', datatype: 'tupletype', list: list }]
 			})
 		},
 
-		'while': () => {
+		'tuple': () => {
 			return new Match([
-				new MatchToken("TK_KEYWORD_WHILE"),
-				new MatchTerm('cmpexp'),
-				new MatchToken("TK_KEYWORD_DO"),
-				new MatchTerm('statment'),
+				new MatchToken('TK_LCIR'),
+				new MatchTerm('expression'),
+				new MatchToken("TK_COMMA"),
+				new MatchTerm('expression'),
+				new More_or_None([
+					new Match([
+						new MatchToken("TK_COMMA"),
+						new MatchTerm('expression')
+					], (match, token) => {
+						return match.nodes[0]
+					})
+				], (match, token) => {
+					return ['explist', match.nodes]
+				}),
+				new MatchToken('TK_RCIR')
 			], (match, token) => {
-				return ['while', {
-					type: 'while',
-					expression: match.nodes[0][1],
-					sub: [match.nodes[1][1]]
-				}]
+				let list = []
+				// console.log(">>> tuple", match.nodes)
+				if (match.nodes[0] && match.nodes[1])
+					list = [match.nodes[0][1], match.nodes[1][1]]
+				if (match.nodes[2] && match.nodes[2][0] === "explist") {
+					match.nodes[2][1].forEach((i) => {
+						list.push(i[1])
+					})
+				}
+				return ['tuple', { type: 'tuple', list: list }]
 			})
 		},
 
-		'call': () => {
+		'array': () => {
+			return new ChooseOne([
+				new Match([
+					new MatchToken('TK_LSQR'),
+					new MatchToken('TK_RSQR')
+				], () => { return ['array', { type: 'array', list: [] }] }),
+				new Match([
+					new MatchToken('TK_LSQR'),
+					new MatchTerm('expression'),
+					new More_or_None([
+						new Match([
+							new MatchToken("TK_COMMA"),
+							new MatchTerm('expression')
+						], (match, token) => {
+							return match.nodes[0]
+						})
+					], (match, token) => {
+						return ['explist', match.nodes]
+					}),
+					new MatchToken('TK_RSQR')
+				], (match, token) => {
+					let list = []
+					// console.log(">>> tuple", match.nodes)
+					if (match.nodes[0])
+						list = [match.nodes[0][1]]
+					if (match.nodes[1] && match.nodes[1][0] === "explist") {
+						match.nodes[1][1].forEach((i) => {
+							list.push(i[1])
+						})
+					}
+					return ['array', { type: 'array', list: list }]
+				})
+			])
+		},
+
+		"transtype": () => {
 			return new Match([
-				new MatchToken("TK_KEYWORD_CALL"),
-				new MatchToken("TK_IDENTIFIER", undefined, (match, token) => { return ['identifier', { type: 'identifier', value: token.value }] })
+				new MatchTerm('arguments'),
+				new MatchToken('TK_TO'),
+				new ChooseOne([
+					new MatchTerm('tupletype'),
+					new Match([
+						new MatchToken('TK_LCIR'),
+						new Once_or_None([
+							new MatchTerm('type')
+						]),
+						new MatchToken('TK_RCIR')
+					], (match, token) => {
+						return ['tupledef', { type: 'tupledef', list: match.nodes[0] ? [match.nodes[0][1]] : [] }]
+					})
+				])
 			], (match, token) => {
-				return ['call', {
-					type: 'call',
-					identifier: match.nodes[0][1]
-				}]
+				// console.log(match.nodes)
+				return ['transtype', { type: 'transtype', from: match.nodes[0][1].list, to: match.nodes[1][1].list }]
 			})
 		},
 
-		'read': () => {
+		'vardef': () => {
 			return new Match([
-				new MatchToken("TK_KEYWORD_READ"),
-				new MatchToken("TK_LCIR", undefined),
+				new MatchToken("TK_KEYWORD", "var", (match, token) => { return undefined }),
 				new MatchToken("TK_IDENTIFIER", undefined, (match, token) => { return ['identifier', { type: 'identifier', value: token.value }] }),
-				new More_or_None([
+				new Once_or_None([
 					new Match([
-						new MatchToken("TK_COMMA", undefined),
-						new MatchToken("TK_IDENTIFIER", undefined, (match, token) => { return ['identifier', { type: 'identifier', value: token.value }] })
+						new MatchToken("TK_TYPEDEFINE", undefined, (match, token) => { return undefined }),
+						new MatchTerm('type')
 					], (match, token) => {
-						return ['identifier', match.nodes[0]]
+						return ['datatype', match.nodes[0][1]];
 					})
-				], (match, token) => { return ['identifiers', match.nodes] }),
-				new MatchToken("TK_RCIR", undefined),
+				]),
+				new Once_or_None([
+					new Match([
+						new MatchToken("TK_ASSIGN", undefined, (match, token) => { return undefined }),
+						new MatchTerm("expression")
+					], (match, token) => {
+						return ['default', match.nodes[0][1]];
+					})
+				])
 			], (match, token) => {
-				// console.log(match.nodes)
-				let arr = [match.nodes[0][1]]
-				arr = arr.concat(match.nodes[1][1].map((i) => {
-					return i[1][1]
-				}))
-				return ['read', {
-					type: 'read',
-					identifiers: arr
-				}]
+				if (match.nodes.length === 1) {
+					return ['vardef', { type: 'vardef', identifier: match.nodes[0][1], datatype: null, default: null }];
+				}
+				if (match.nodes.length === 2) {
+					if (match.nodes[1][0] === 'datatype') {
+						return ['vardef', { type: 'vardef', identifier: match.nodes[0][1], datatype: match.nodes[1][1], default: null }];
+					}
+					else {
+						return ['vardef', { type: 'vardef', identifier: match.nodes[0][1], datatype: null, default: match.nodes[1][1] }];
+					}
+				}
+				if (match.nodes.length === 3) {
+					return ['vardef', { type: 'vardef', identifier: match.nodes[0][1], datatype: match.nodes[1][1], default: match.nodes[2][1] }];
+				}
+				return undefined;
 			})
 		},
 
-		'write': () => {
+		'constdef': () => {
 			return new Match([
-				new MatchToken("TK_KEYWORD_WRITE"),
-				new MatchToken("TK_LCIR", undefined),
-				new MatchTerm("exp"),
-				new More_or_None([
+				new MatchToken("TK_KEYWORD", "const", (match, token) => { return undefined }),
+				new MatchToken("TK_IDENTIFIER", undefined, (match, token) => { return ['identifier', { type: 'identifier', value: token.value }] }),
+				new Once_or_None([
 					new Match([
-						new MatchToken("TK_COMMA", undefined),
-						new MatchTerm("exp")
+						new MatchToken("TK_TYPEDEFINE", undefined, (match, token) => { return undefined }),
+						new MatchTerm('type')
 					], (match, token) => {
-						return ['expression', match.nodes[0]]
+						return ['datatype', match.nodes[0][1]];
 					})
-				], (match, token) => { return ['expressions', match.nodes] }),
-				new MatchToken("TK_RCIR", undefined),
+				]),
+				new Match([
+					new MatchToken("TK_ASSIGN", undefined, (match, token) => { return undefined }),
+					new MatchTerm("expression")
+				], (match, token) => {
+					return ['default', match.nodes[0][1]];
+				})
+			], (match, token) => {
+				if (match.nodes.length === 1) {
+					return ['constdef', { type: 'constdef', identifier: match.nodes[0][1], datatype: null, default: null }];
+				}
+				if (match.nodes.length === 2) {
+					if (match.nodes[1][0] === 'datatype') {
+						return ['constdef', { type: 'constdef', identifier: match.nodes[0][1], datatype: match.nodes[1][1], default: null }];
+					}
+					else {
+						return ['constdef', { type: 'constdef', identifier: match.nodes[0][1], datatype: null, default: match.nodes[1][1] }];
+					}
+				}
+				if (match.nodes.length === 3) {
+					return ['constdef', { type: 'constdef', identifier: match.nodes[0][1], datatype: match.nodes[1][1], default: match.nodes[2][1] }];
+				}
+				return undefined;
+			})
+		},
+
+		'defdef': () => {
+			return new Match([
+				new MatchToken("TK_KEYWORD", "def", (match, token) => { return undefined }),
+				new MatchToken("TK_IDENTIFIER", undefined, (match, token) => { return ['identifier', { type: 'identifier', value: token.value }] }),
+				new Match([
+					new MatchToken("TK_TYPEDEFINE", undefined, (match, token) => { return undefined }),
+					new MatchToken("TK_KEYWORD", undefined, (match, token) => { return ['deftype', token.value] })
+				], (match, token) => {
+
+					return ['datatype', match.nodes[0][1]];
+				}),
+				new Match([
+					new MatchToken("TK_ASSIGN", undefined, (match, token) => { return undefined }),
+					new MatchTerm("block")
+				], (match, token) => {
+					return ['default', match.nodes[0][1]];
+				})
 			], (match, token) => {
 				// console.log(match.nodes)
-				let arr = [match.nodes[0][1]]
-				arr = arr.concat(match.nodes[1][1].map((i) => {
-					return i[1][1]
-				}))
-				return ['write', {
-					type: 'write',
-					expressions: arr
-				}]
+				if (match.nodes[1][1] === 'class')
+					return ['classdef', { type: 'classdef', identifier: match.nodes[0][1], definition: match.nodes[2][1] }];
+				return undefined
+			})
+		},
+
+		'return': () => {
+			return new Match([
+				new MatchToken('TK_KEYWORD', 'return'),
+				new Once_or_None([
+					new ChooseOne([
+						new MatchTerm('expression'),
+						new MatchTerm('tuple'),
+					])
+				])
+			], (match, token) => {
+				return ['return', { type: 'return', list: match.nodes[0] ? match.nodes[0][1] : [] }]
+			})
+		},
+
+		'funcdef': () => {
+			return new Match([
+				new MatchToken("TK_KEYWORD", "func", (match, token) => { return undefined }),
+				new MatchToken("TK_IDENTIFIER", undefined, (match, token) => { return ['identifier', { type: 'identifier', value: token.value }] }),
+				new MatchToken("TK_TYPEDEFINE"),
+				new MatchTerm('transtype'),
+				new MatchToken("TK_ASSIGN", undefined, (match, token) => { return undefined }),
+				new More_or_None([
+					new MatchToken("TK_NEWLINE", undefined),
+				], (match, token) => { return undefined }),
+				new MatchTerm("block")
+			], (match, token) => {
+				return ['funcdef', { type: 'funcdef', identifier: match.nodes[0] ? match.nodes[0][1] : null, datatype: match.nodes[1] ? match.nodes[1][1] : null, sub: match.nodes[2] && match.nodes[2][1] ? match.nodes[2][1].sub : [] }];
 			})
 		},
 
 		'block': () => {
 			return new Match([
-				new MatchToken("TK_KEYWORD_BEGIN"),
-				new MatchTerm("statment"),
+				new MatchToken("TK_LBRACE"),
+				new More_or_None([
+					new MatchToken("TK_NEWLINE", undefined),
+				], (match, token) => { return undefined }),
+				new More_or_None([
+					new MatchTerm('program')
+				], (match, token) => {
+					return match.nodes[0]
+				}),
+				new More_or_None([
+					new MatchToken("TK_NEWLINE", undefined),
+				], (match, token) => { return undefined }),
+				new MatchToken("TK_RBRACE")
+			], (match, token) => {
+				if (match.nodes[0])
+					return ['block', match.nodes[0][1]];
+				return undefined;
+			})
+		},
+
+		'if': () => {
+			return new Match([
+				new MatchToken("TK_KEYWORD", "if"),
+				new MatchToken("TK_TYPEDEFINE"),
+				new MatchTerm('expression'),
+				new MatchTerm('block'),
 				new More_or_None([
 					new Match([
-						new MatchToken("TK_END", undefined),
-						new MatchTerm("statment")
+						new MatchToken("TK_KEYWORD", "elseif"),
+						new MatchToken("TK_TYPEDEFINE"),
+						new MatchTerm('expression'),
+						new MatchTerm('block'),
 					], (match, token) => {
-						// console.log(match.nodes)
-						if (match.nodes[0][1] === null) return undefined
-						return ['statment', match.nodes[0]]
+						return ['else if', match.nodes]
 					})
-				], (match, token) => { return ['statments', match.nodes] }),
-				new MatchToken("TK_KEYWORD_END")
+				], (match, token) => {
+					return ['else ifs', match.nodes]
+				}),
+				new Once_or_None([
+					new Match([
+						new MatchToken("TK_KEYWORD", "else"),
+						new MatchToken("TK_TYPEDEFINE"),
+						new MatchTerm('block'),
+					], (match, token) => {
+						return ['else', match.nodes[0]]
+					})
+				]),
 			], (match, token) => {
-				// console.log(match.nodes)
-				let arr = match.nodes[0][1] === null ? [] : [match.nodes[0][1]]
-				arr = arr.concat(match.nodes[1][1].map((i) => {
-					return i[1][1]
-				}))
-				return ['block', {
-					type: 'block',
-					statments: arr
-				}]
+				let main = undefined;
+				let mainif = undefined;
+				if (match.nodes[0] !== undefined)
+					main = mainif = { type: 'if', expression: match.nodes[0][1], sub: match.nodes[1][1] === null ? [] : match.nodes[1][1].sub, else: [] };
+				if (match.nodes[2]) {
+					match.nodes[2][1].forEach((i) => {
+						let elseif = { type: 'if', expression: i[1][0][1], sub: i[1][1][1] === null ? [] : [i[1][1][1]], else: [] };
+						mainif.else.push(elseif);
+						mainif = elseif;
+					})
+				}
+				if (match.nodes[3] && match.nodes[3][1][1]) {
+					mainif.else = match.nodes[3][1][1].sub;
+				}
+				// if ()
+				return ["if", main]
 			})
 		},
 
-		'proceduredef': () => {
+		'while': () => {
 			return new Match([
-				new MatchToken("TK_KEYWORD_PROCEDURE"),
+				new MatchToken("TK_KEYWORD", "while"),
+				new Once_or_None([
+					new MatchToken("TK_IDENTIFIER", undefined, (match, token) => { return ['identifier', { type: 'identifier', value: token.value }] }),
+				]),
+				// new MatchToken("TK_TYPEDEFINE"),
+				new MatchToken("TK_TYPEDEFINE"),
+				// new MatchToken("TK_LCIR"),
+				new MatchTerm('expression', undefined, true),
+				// new MatchToken("TK_RCIR"),
+				new More_or_None([
+					new MatchToken("TK_NEWLINE"),
+				], (match, token) => { return undefined }),
+				new MatchTerm('block', undefined, true)
+			], (match, token) => {
+				// console.log(match.nodes)
+				let main = undefined;
+				// let mainwhile = undefined;
+				if (match.nodes.length === 2 && match.nodes[0] !== undefined)
+					main = { type: 'while', expression: match.nodes[0][1], sub: match.nodes[1][1] === null ? [] : match.nodes[1][1].sub, tag: null };
+				if (match.nodes.length === 3 && match.nodes[0] !== undefined)
+					main = { type: 'while', expression: match.nodes[1][1], sub: match.nodes[2][1] === null ? [] : match.nodes[2][1].sub, tag: match.nodes[0][1].value };
+				return ["while", main]
+			})
+		},
+
+		'for': () => {
+			return new Match([
+				new MatchToken("TK_KEYWORD", "for"),
+				// new Once_or_None([
 				new MatchToken("TK_IDENTIFIER", undefined, (match, token) => { return ['identifier', { type: 'identifier', value: token.value }] }),
-				new MatchToken("TK_END", undefined)
-			], (match, token) => {
-				return ['procdef', {
-					type: 'procdef',
-					identifier: match.nodes[0][1].value
-				}]
-			})
-		},
-
-		'procedure': () => {
-			return new Match([
-				new MatchTerm("proceduredef"),
-				new MatchTerm("subprogram"),
-				new MatchToken("TK_END", undefined)
-			], (match, token) => {
-				return ['proc', {
-					type: 'proc',
-					identifier: match.nodes[0][1],
-					block: match.nodes[1][1],
-				}]
-			})
-		},
-
-		'subprogram': () => {
-			return new Match([
+				// ]),
+				new Once_or_None([
+					new Match([
+						new MatchToken("TK_COMMA"),
+						new MatchToken("TK_IDENTIFIER", undefined, (match, token) => { return ['identifier', { type: 'identifier', value: token.value }] }),
+					], (match, tokens) => {
+						return match.nodes[0]
+					})
+				]),
+				// new MatchToken("TK_TYPEDEFINE"),
+				new MatchToken("TK_TYPEDEFINE"),
+				// new MatchToken("TK_LCIR"),
+				new MatchTerm('expression', undefined, true),
+				// new MatchToken("TK_IDENTIFIER", undefined, (match, token) => { return ['identifier', { type: 'identifier', value: token.value }] }),
+				// new MatchToken("TK_RCIR"),
 				new More_or_None([
-					new MatchTerm("const")
-				], (match, token) => {
-					return ['consts', match.nodes]
-				}),
-				new More_or_None([
-					new MatchTerm("var")
-				], (match, token) => {
-					return ['vars', match.nodes]
-				}),
-				new More_or_None([
-					new MatchTerm("procedure")
-				], (match, token) => {
-					return ['procs', match.nodes]
-				}),
-				new MatchTerm('statment')
+					new MatchToken("TK_NEWLINE"),
+				], (match, token) => { return undefined }),
+				new MatchTerm('block', undefined, true)
 			], (match, token) => {
 				// console.log(match.nodes)
-				return ['subprogram', {
-					type: 'subprogram',
-					consts: match.nodes[0][1].map(i => i[1]),
-					vars: match.nodes[1][1].map(i => i[1]),
-					procs: match.nodes[2][1].map(i => i[1]),
-					subs: match.nodes[3][1]
-				}]
+				let main = undefined;
+				// let mainwhile = undefined;
+				if (match.nodes.length === 3 && match.nodes[0] !== undefined)
+					main = { type: 'for', expression: match.nodes[1][1], sub: match.nodes[2][1] === null ? [] : match.nodes[2][1].sub, tag: match.nodes[0][1].value, index: null };
+				if (match.nodes.length === 4 && match.nodes[0] !== undefined)
+					main = { type: 'for', expression: match.nodes[2][1], sub: match.nodes[3][1] === null ? [] : match.nodes[3][1].sub, tag: match.nodes[0][1].value, index: match.nodes[1][1].value };
+				return ["for", main]
 			})
 		},
 
 		'program': () => {
 			return new Match([
-				new MatchTerm('subprogram'),
-				new MatchToken("TK_DOT", undefined)
+				new More_or_None([
+					new MatchToken("TK_NEWLINE", undefined),
+				], (match, token) => { return undefined }),
+				new MatchTerm('statement'),
+				new More_or_None([
+					new Match([
+						new More_or_None([
+							new MatchToken("TK_NEWLINE", undefined),
+						], (match, token) => { return undefined }),
+						new MatchTerm('statement')
+					], (match, token) => {
+						return match.nodes[0]
+					})
+				], (match, token) => { return match.nodes.length === 0 ? undefined : ['statements', match.nodes] }),
+				new More_or_None([
+					new MatchToken("TK_NEWLINE", undefined),
+				], (match, token) => { return undefined })
 			], (match, token) => {
-				return match.nodes[0]
-			})
-		}
-	}, "program");
-}
-
-export const LL1PL0 = function () {
-	return new Language("PL/0", {
-		"程序": () => {
-			return new Match([
-				new MatchTerm("分程序"),
-				new MatchToken("TK_DOT")
-			])
-		},
-		"分程序": () => {
-			return new Match([
-				new MatchTerm("分程序1"),
-				new MatchTerm("分程序2"),
-				new MatchTerm("分程序3"),
-				new MatchTerm("语句")
-			])
-		},
-		"分程序1": () => {
-			return new ChooseOne([
-				new MatchTerm("常量说明"),
-				new Skip()
-			])
-		},
-		"分程序2": () => {
-			return new ChooseOne([
-				new MatchTerm("变量说明"),
-				new Skip()
-			])
-		},
-		"分程序3": () => {
-			return new ChooseOne([
-				new MatchTerm("过程说明"),
-				new Skip()
-			])
-		},
-		"常量说明": () => {
-			return new Match([
-				new MatchToken("TK_KEYWORD_CONST"),
-				new MatchTerm("常量定义"),
-				new MatchTerm("常量说明1"),
-				new MatchToken("TK_END"),
-			])
-		},
-		"常量定义": () => {
-			return new Match([
-				new MatchToken("TK_IDENTIFIER"),
-				new MatchToken("TK_ASSIGN"),
-				new MatchToken("TK_INT")
-			])
-		},
-		"常量说明1": () => {
-			return new ChooseOne([
-				new Match([
-					new MatchToken("TK_COMMA"),
-					new MatchTerm("常量定义"),
-					new MatchTerm("常量说明1")
-				]),
-				new Skip()
-			])
-		},
-		"变量说明": () => {
-			return new Match([
-				new MatchToken("TK_KEYWORD_VAR"),
-				new MatchToken("TK_IDENTIFIER"),
-				new MatchTerm("变量说明1"),
-				new MatchToken("TK_END")
-			])
-		},
-		"变量说明1": () => {
-			return new ChooseOne([
-				new Match([
-					new MatchToken("TK_COMMA"),
-					new MatchToken("TK_IDENTIFIER"),
-					new MatchTerm("变量说明1")
-				]),
-				new Skip()
-			])
-		},
-		"过程说明": () => {
-			return new Match([
-				new MatchTerm("过程说明1"),
-				new MatchTerm("过程说明2"),
-			])
-		},
-		"过程说明1": () => {
-			return new Match([
-				new MatchTerm("过程首部"),
-				new MatchTerm("分程序"),
-				new MatchToken("TK_END"),
-			])
-		},
-		"过程说明2": () => {
-			return new ChooseOne([
-				new Match([
-					new MatchTerm("过程说明1"),
-					new MatchTerm("过程说明2"),
-				]),
-				new Skip()
-			])
-		},
-		"过程首部": () => {
-			return new Match([
-				new MatchToken("TK_KEYWORD_PROCEDURE"),
-				new MatchToken("TK_IDENTIFIER"),
-				new MatchToken("TK_END")
-			])
-		},
-		"语句": () => {
-			return new ChooseOne([
-				new MatchTerm("赋值语句"),
-				new MatchTerm("条件语句"),
-				new MatchTerm("当循环语句"),
-				new MatchTerm("过程调用语句"),
-				new MatchTerm("复合语句"),
-				new MatchTerm("读语句"),
-				new MatchTerm("写语句"),
-				new Skip()
-			])
-		},
-		"赋值语句": () => {
-			return new Match([
-				new MatchToken("TK_IDENTIFIER"),
-				new MatchToken("TK_BECOME"),
-				new MatchTerm("表达式")
-			])
-		},
-		"复合语句": () => {
-			return new Match([
-				new MatchToken("TK_KEYWORD_BEGIN"),
-				new MatchTerm("语句"),
-				new MatchTerm("复合语句1"),
-				new MatchToken("TK_KEYWORD_END"),
-			])
-		},
-		"复合语句1": () => {
-			return new ChooseOne([
-				new Match([
-					new MatchToken("TK_END"),
-					new MatchTerm("语句"),
-					new MatchTerm("复合语句1"),
-				]),
-				new Skip()
-			])
-		},
-		"条件表达式": () => {
-			return new ChooseOne([
-				new Match([
-					new MatchTerm("表达式"),
-					new MatchTerm("关系运算符"),
-					new MatchTerm("表达式")
-				]),
-				new Match([
-					new MatchToken("TK_KEYWORD_ODD"),
-					new MatchTerm("表达式")
-				])
-			])
-		},
-		"表达式": () => {
-			return new Match([
-				new MatchTerm("表达式1"),
-				new MatchTerm("项"),
-				new MatchTerm("表达式2")
-			])
-		},
-		"表达式1": () => {
-			return new ChooseOne([
-				new MatchToken("TK_ADD"),
-				new MatchToken("TK_MINUS"),
-				new Skip()
-			])
-		},
-		"表达式2": () => {
-			return new ChooseOne([
-				new Match([
-					new MatchTerm("加减法运算符"),
-					new MatchTerm("项"),
-					new MatchTerm("表达式2")
-				]),
-				new Skip()
-			])
-		},
-		"项": () => {
-			return new Match([
-				new MatchTerm("因子"),
-				new MatchTerm("项1")
-			])
-		},
-		"项1": () => {
-			return new ChooseOne([
-				new Match([
-					new MatchTerm("乘除法运算符"),
-					new MatchTerm("因子"),
-					new MatchTerm("项1")
-				]),
-				new Skip()
-			])
-		},
-		"因子": () => {
-			return new ChooseOne([
-				new MatchToken("TK_IDENTIFIER"),
-				new MatchToken("TK_INT"),
-				new Match([
-					new MatchToken("TK_LCIR"),
-					new MatchTerm("表达式"),
-					new MatchToken("TK_RCIR")
-				])
-			])
-		},
-		"加减法运算符": () => {
-			return new ChooseOne([
-				new MatchToken("TK_ADD"),
-				new MatchToken("TK_MINUS")
-			])
-		},
-		"乘除法运算符": () => {
-			return new ChooseOne([
-				new MatchToken("TK_MULTIPLY"),
-				new MatchToken("TK_DIVIDE")
-			])
-		},
-		"关系运算符": () => {
-			return new ChooseOne([
-				new MatchToken("TK_EQUAL"),
-				new MatchToken("TK_NOTEQUAL"),
-				new MatchToken("TK_LESS"),
-				new MatchToken("TK_GREATER"),
-				new MatchToken("TK_LESSE"),
-				new MatchToken("TK_GREATERE"),
-			])
-		},
-		"条件语句": () => {
-			return new Match([
-				new MatchToken("TK_KEYWORD_IF"),
-				new MatchTerm("条件表达式"),
-				new MatchToken("TK_KEYWORD_THEN"),
-				new MatchTerm("语句")
-			])
-		},
-		"过程调用语句": () => {
-			return new Match([
-				new MatchToken("TK_KEYWORD_CALL"),
-				new MatchToken("TK_IDENTIFIER"),
-			])
-		},
-		"当循环语句": () => {
-			return new Match([
-				new MatchToken("TK_KEYWORD_WHILE"),
-				new MatchTerm("条件表达式"),
-				new MatchToken("TK_IDENTIFIER"),
-				new MatchTerm("语句")
-			])
-		},
-		"读语句": () => {
-			return new Match([
-				new MatchToken("TK_KEYWORD_READ"),
-				new MatchToken("TK_LCIR"),
-				new MatchToken("TK_IDENTIFIER"),
-				new MatchTerm("读语句1"),
-				new MatchToken("TK_RCIR")
-			])
-		},
-		"读语句1": () => {
-			return new ChooseOne([
-				new Match([
-					new MatchToken("TK_COMMA"),
-					new MatchToken("TK_IDENTIFIER"),
-					new MatchTerm("读语句1"),
-				]),
-				new Skip()
-			])
-		},
-		"写语句": () => {
-			return new Match([
-				new MatchToken("TK_KEYWORD_WRITE"),
-				new MatchToken("TK_LCIR"),
-				new MatchTerm("表达式"),
-				new MatchTerm("写语句1"),
-				new MatchToken("TK_RCIR")
-			])
-		},
-		"写语句1": () => {
-			return new ChooseOne([
-				new Match([
-					new MatchToken("TK_COMMA"),
-					new MatchTerm("表达式"),
-					new MatchTerm("写语句1"),
-				]),
-				new Skip()
-			])
-		}
-	}, "程序", true);
-}
-
-export const Calculator = function () {
-	return new Language("PL0 Calculator", {
-		"表达式": () => {
-			return new Match([
-				new Once_or_None([
-					new MatchTerm("加法运算符")
-				], true),
-				new MatchTerm("项"),
-				new More_or_None([
-					new Match([
-						new MatchTerm("加法运算符"),
-						new MatchTerm("项")
-					], (match) => {
-						return ["more", { op: match.nodes[0][1].value, target: match.nodes[1][1] }]
-					})
-				], (match) => {
-					return ["mores", match.nodes]
-				})
-			], (match) => {
-				let term = match.nodes[1][1]
-				if (match.nodes[0][1] !== null) {
-					term = {
-						type: "uniop",
-						value: match.nodes[0][1].value,
-						sub: term,
-						$start: match.nodes[0][1].$start,
-						$end: term.$end,
-						$startidx: match.nodes[0][1].$startidx,
-						$endidx: term.$endidx,
-					}
+				let nodes = [];
+				if (match.nodes[0])
+					nodes = [match.nodes[0][1]];
+				if (match.nodes[1]) {
+					nodes = nodes.concat(match.nodes[1][1].map((n) => {
+						return n[1]
+					}));
 				}
-				let sub = term
-				match.nodes[2][1].forEach((more) => {
-					let b = more[1]
-					sub = {
-						type: "binop",
-						value: b.op,
-						sub: [sub, b.target],
-						$start: sub.$start,
-						$end: b.target.$end,
-						$startidx: sub.$startidx,
-						$endidx: b.target.$endidx,
-					}
-				})
-				return ['exp', sub]
+				return ['program', { type: 'program', sub: nodes }];
 			})
 		},
-		"项": () => {
-			return new Match([
-				new MatchTerm("因子"),
-				new More_or_None([
-					new Match([
-						new MatchTerm("乘法运算符"),
-						new MatchTerm("因子")
-					], (match) => {
-						// console.log("????", match.nodes)
-						return ["more", { op: match.nodes[0][1].value, target: match.nodes[1][1] }]
-					})
-				], (match) => {
-					return ["mores", match.nodes]
-				})
-			], (match) => {
-				let term = match.nodes[0][1]
-				let sub = term
-				match.nodes[1][1].forEach((more) => {
-					let b = more[1]
-					sub = {
-						type: "binop",
-						value: b.op,
-						sub: [sub, b.target],
-						$start: sub.$start,
-						$end: b.target.$end,
-						$startidx: sub.$startidx,
-						$endidx: b.target.$endidx,
-					}
-				})
-				return ['exp', sub]
-			})
-		},
-		"因子": () => {
-			return new Match([
-				new Once_or_None([
-					new MatchTerm("加法运算符")
-				], true),
-				new MatchTerm("原子"),
-			], (match) => {
-				let term = match.nodes[1][1]
-				if (match.nodes[0][1] !== null && match.nodes[0][1].value === "-") {
-					term = {
-						type: "uniop",
-						value: match.nodes[0][1].value,
-						sub: term,
-						$start: match.nodes[0][1].$start,
-						$end: term.$end,
-						$startidx: match.nodes[0][1].$startidx,
-						$endidx: term.$endidx,
-					}
-				}
-				return ['factor', term]
-			})
-		},
-		"原子": () => {
-			return new ChooseOne([
-				new MatchToken("TK_IDENTIFIER", undefined, (match, token) => {
-					return ['iden', { type: 'identifier', value: token.value }]
-				}),
-				new MatchToken("TK_INT", undefined, (match, token) => {
-					return ['value', { type: 'value', value: token.value }]
-				}),
-				new Match([
-					new MatchToken("TK_LCIR"),
-					new MatchTerm("表达式"),
-					new MatchToken("TK_RCIR")
-				], (match) => {
-					return match.nodes[0]
-				})
-			], true)
-		},
-		"加法运算符": () => {
-			return new ChooseOne([
-				new MatchToken("TK_ADD", undefined, (match, token) => {
-					return ["op", { type: "op", value: "+" }]
-				}),
-				new MatchToken("TK_MINUS", undefined, (match, token) => {
-					return ["op", { type: "op", value: "-" }]
-				})
-			], true)
-		},
-		"乘法运算符": () => {
-			return new ChooseOne([
-				new MatchToken("TK_MULTIPLY", undefined, (match, token) => {
-					return ["op", { type: "op", value: "*" }]
-				}),
-				new MatchToken("TK_DIVIDE", undefined, (match, token) => {
-					return ["op", { type: "op", value: "/" }]
-				})
-			], true)
-		}
-	}, "表达式")
-}
 
-export const LL1Calculator = function () {
-	return new Language("LL1Calculator", {
-		"E": () => {
-			return new Match([
-				new MatchTerm("T"),
-				new MatchTerm("E'")
-			])
-		},
-		"E'": () => {
+		'statement': () => {
 			return new ChooseOne([
-				new Match([
-					new MatchToken("TK_ADD"),
-					new MatchTerm("T"),
-					new MatchTerm("E'")
-				]),
-				new Match([
-					new MatchToken("TK_MINUS"),
-					new MatchTerm("T"),
-					new MatchTerm("E'")
-				]),
-				new Skip()
-			])
-		},
-		"T": () => {
-			return new Match([
-				new MatchTerm("A"),
-				new MatchTerm("T'")
-			])
-		},
-		"T'": () => {
-			return new ChooseOne([
-				new Match([
-					new MatchToken("TK_MULTIPLY"),
-					new MatchTerm("A"),
-					new MatchTerm("T'")
-				]),
-				new Match([
-					new MatchToken("TK_DIVIDE"),
-					new MatchTerm("A"),
-					new MatchTerm("T'")
-				]),
-				new Skip()
-			])
-		},
-		"A": () => {
-			return new ChooseOne([
-				new MatchTerm("F"),
-				new Match([
-					new MatchToken("TK_ADD"),
-					new MatchTerm("F"),
-				]),
-				new Match([
-					new MatchToken("TK_MINUS"),
-					new MatchTerm("F"),
-				])
-			])
-		},
-		"F": () => {
-			return new ChooseOne([
-				new MatchToken("TK_INT"),
-				new MatchToken("TK_IDENTIFIER"),
-				new Match([
-					new MatchToken("TK_LCIR"),
-					new MatchTerm("E"),
-					new MatchToken("TK_RCIR")
-				])
+				new MatchTerm('vardef'),
+				new MatchTerm('constdef'),
+				new MatchTerm('defdef'),
+				new MatchTerm('funcdef'),
+				new MatchTerm('expression'),
+				new MatchTerm('block'),
+				new MatchTerm('if'),
+				new MatchTerm('while'),
+				new MatchTerm('for'),
+				new MatchTerm('return'),
 			])
 		}
-	}, "E", true)
+	}, 'program')
 }
 
-Array.prototype.tab = function () {
-	return this.join("\n").split('\n').map((i) => "    " + i).join('\n')
-}
-
-// Walker
-function typeCheck(a, b) {
-	// console.log(">>>>", a, b)
-	if (a.type === b.type) {
-		// console.log("match >>>>", a, b)
-		if (a.type === 'type') return a.value === b.value;
-		else if (a.type === 'arraytype') {
-			return (a.value === b.value) && (a.count === b.count);
+export function typeCheck(a, b) {
+	if (a.value === "$any" || b.value === "$any") {
+		return true
+	}
+	if (a.datatype === b.datatype) {
+		if (a.datatype === 'base') {
+			if (a.value === '$number') {
+				return 'int' === b.value || 'float' === b.value
+			}
+			if (b.value === '$number') {
+				return 'int' === a.value || 'float' === a.value
+			}
+			else
+				return a.value === b.value
+		}
+		else if (a.datatype === 'arraytype') {
+			return typeCheck(a.value, b.value) && (a.count === null || a.count === b.count);
+		}
+		else if (a.datatype === 'tupletype') {
+			if (a.list.length !== b.list.length) return false;
+			for (let i = 0; i < a.list.length; i++) {
+				if (!typeCheck(a.list[i], b.list[i])) return false;
+			}
+			return true;
 		}
 	}
 	else {
@@ -2740,429 +2548,501 @@ function typeCheck(a, b) {
 	}
 }
 
-function typeToString(a) {
-	if (a.type === "type") return a.value;
-	else if (a.type === "arraytype") return `${a.value}[${a.count}]`;
+export function cloneType(a) {
+	const type = {
+		type: "datatype",
+		datatype: a.datatype
+	}
+	if (a.datatype === 'base') {
+		type.value = a.value
+	}
+	else if (a.datatype === 'arraytype') {
+		type.count = a.count
+		type.value = a.value
+	}
+	else if (a.datatype === 'base') {
+		type.list = a.list.map(t => cloneType(t))
+	}
+	return type
+}
+
+export function typeToString(a) {
+	if (a.datatype === "base") return a.value;
+	else if (a.datatype === "arraytype") return `(${typeToString(a.value)})[${a.count === null ? '' : a.count}]`;
+	else if (a.datatype === "tupletype") {
+		let arr = a.list.map(i => typeToString(i))
+		return `(${arr.join(', ')})`
+	}
 	return "$unknown";
 }
 
-export const PL0Visitors = {
-	subprogram: {
+
+export const SunLangVisitor = {
+	program: {
 		walk(node, path) {
 			path.$scope.new_Scope()
-			return ["consts", "vars", "procs", "subs"]
+			return ["sub"]
 		},
 		transform(path) {
 			path.$scope.exit_Scope()
 			return path.node
 		}
 	},
-	const: {
-		walk(node) {
-			// console.log(">>> consts visitor walk func")
-			return ["consts"]
-		},
-		transform(path) {
-			return path.node
-		}
-	},
-	var: {
-		walk(node) {
-			return ["vars"]
-		},
-		transform(path) {
-			return path.node
-		}
-	},
 	vardef: {
 		walk(node) {
-			// console.log(node.typedef)
-			return ["default", "typedef"]
+			return ["default", "datatype"]
 		},
 		transform(path) {
-			let iden = new Identifier(path.node.identifier, "var", path.node, path.node.typedef)
+			console.info(path)
+			let iden = new Identifier(path.node.identifier.value, "var", path.node, path.node.datatype)
 			let [ans, old] = path.$scope.registe(iden)
 			if (!ans) {
 				let [str, starter, end] = path.$sourcescript.get_ScriptPortion(old.def.$start, old.def.$end, "~", "yellow")
-				let reason = str + `<a style="color: white">${starter}${end}</a><a style="color: yellow">|</a>\n<a style="color: white">${starter}${end}</a><a style="color: yellow">last definition of ${old.def.identifier}</a>`
-				return [path.node, new BaseError("VariableRedefinitionError", `\n${reason}\n\nwhen defining var <a style="color: rgb(0,255,0);">${path.node.identifier}</a>\nwhich has been already defined before`, path.$start, path.$end)]
+				let reason = str + `<a style="color: white">${starter}${end}</a><a style="color: yellow">|</a>\n<a style="color: white">${starter}${end}</a>last definition here`
+				return [path.node, new BaseError("VariableRedefinitionError", `\n${reason}\n\nwhen defining var <a style="color: rgb(0,255,0);">${path.node.identifier.value}</a>\nwhich has been already defined before`, path.$start, path.$end)]
 			}
-			if (path.node.default !== null)
-				if (!typeCheck(path.node.default.typedef, path.node.typedef)) {
-					let [str1, starter1, end1] = path.$sourcescript.get_ScriptPortion(path.node.typedef.$start, path.node.typedef.$end, "~", "yellow")
-					let [str, starter, end] = path.$sourcescript.get_ScriptPortion(path.node.default.$start, path.node.default.$end, "~", "yellow")
-					let reason = str1 + `<a style="color: white">${starter1}${end1}</a><a style="color: yellow">|</a>\n<a style="color: white">${starter1}${end1}</a>defined as <a style="color: yellow">${typeToString(path.node.typedef)}</a>` + '\n\n' + str + `<a style="color: white">${starter}${end}</a><a style="color: yellow">|</a>\n<a style="color: white">${starter}${end}</a>assigned with <a style="color: yellow">${typeToString(path.node.default.typedef)}</a>`
-					return [path.node, new BaseError("TypeCheckError", `\n${reason}\n\nvariable <a style="color: rgb(0,255,0);">${path.node.identifier}</a> is type of ${typeToString(path.node.typedef)}\nbut its default value is type of ${typeToString(path.node.default.typedef)} which is not compatible`, path.$start, path.$end)]
+			if (path.node.default !== null) {
+				if (path.node.datatype === null) {
+					iden.typedef = path.node.default.datatype
+					path.node.datatype = path.node.default.datatype
+					// if (path.node.default.datatype.value === '$unknown') {
+					// 	let [str, starter, end] = path.$sourcescript.get_ScriptPortion(path.node.default.$start, path.node.default.$end, "~", "yellow")
+					// 	let reason = str + `<a style="color: white">${starter}${end}</a><a style="color: yellow">|</a>\n<a style="color: white">${starter}${end}</a>type is unknown`
+					// 	return [path.node, new BaseError("VariableTypeIndistinctError", `\n${reason}\n\ntype of variable <a style="color: rgb(0,255,0);">${path.node.identifier.value}</a> cannot be resolved`, path.$start, path.$end)]
+					// }
+					// else {
+					return path.node
+					// }
 				}
-			return path.node
-		}
-	},
-	arraytype: {
-		walk(node) { },
-		transform(path) {
-			if (path.node.count <= 1) {
-				// let [str1, starter1, end1] = path.$sourcescript.get_ScriptPortion(path.$start, path.$end, "~", "yellow")
-				// let reason = str1
-				return [{ type: "type", value: path.node.value, $start: path.$start, $end: path.$end, $startidx: path.$startidx, $endidx: path.$endidx }, new BaseError("TypeCheckWarning", `size of an array should be bigger than 1\nthis will be assumed as <a style="color: rgb(0, 255,0);">${path.node.value}</a> type`, path.$start, path.$end, { color: 'orange' })]
+				else if (!typeCheck(path.node.datatype, path.node.default.datatype)) {
+					let [str1, starter1, end1] = path.$sourcescript.get_ScriptPortion(path.node.datatype.$start, path.node.datatype.$end, "~", "yellow")
+					let [str, starter, end] = path.$sourcescript.get_ScriptPortion(path.node.default.$start, path.node.default.$end, "~", "yellow")
+					let reason = str1 + `<a style="color: white">${starter1}${end1}</a><a style="color: yellow">|</a>\n<a style="color: white">${starter1}${end1}</a>defined as <a style="color: yellow">${typeToString(path.node.datatype)}</a>` + '\n\n' + str + `<a style="color: white">${starter}${end}</a><a style="color: yellow">|</a>\n<a style="color: white">${starter}${end}</a>assigned with <a style="color: yellow">${typeToString(path.node.default.datatype)}</a>`
+					return [path.node, new BaseError("TypeCheckError", `\n${reason}\n\nvariable <a style="color: rgb(0,255,0);">${path.node.identifier.value}</a> is type of ${typeToString(path.node.datatype)}\nbut its default value is type of ${typeToString(path.node.default.datatype)} which is not compatible`, path.$start, path.$end)]
+				}
+				return path.node
+			}
+			else if (path.node.datatype === null) {
+				console.log(path.node)
+				iden.typedef = { type: 'datatype', datatype: 'base', value: '$unknown' }
+				path.node.datatype = { type: 'datatype', datatype: 'base', value: '$unknown' }
+				return [path.node, new BaseError("VariableDefError", `\nvariable <a style="color: rgb(0,255,0);">${path.node.identifier.value}</a>'s type is not indicated or can be resolved`, path.$start, path.$end, { type: 'warning', color: 'orange' })]
 			}
 			return path.node
 		}
 	},
 	constdef: {
 		walk(node) {
-			// console.log(">>> vardef visitor walk func", node)
-			return ["value"]
+			return ["default"]
 		},
 		transform(path) {
-			// console.log(path.node)
-			let iden = new Identifier(path.node.identifier, "const", path.node, path.node.value.typedef)
+			console.info(path)
+			let iden = new Identifier(path.node.identifier.value, "const", path.node, path.node.datatype)
 			let [ans, old] = path.$scope.registe(iden)
 			if (!ans) {
 				let [str, starter, end] = path.$sourcescript.get_ScriptPortion(old.def.$start, old.def.$end, "~", "yellow")
-				let reason = str + `<a style="color: white">${starter}${end}</a><a style="color: yellow">|</a>\n<a style="color: white">${starter}${end}</a><a style="color: yellow">last definition of ${old.def.identifier}</a>`
-				return [path.node, new BaseError("VariableRedefinitionError", `\n${reason}\n\nwhen defining var <a style="color: rgb(0,255,0);">${path.node.identifier}</a>\nwhich has been already defined before`, path.$start, path.$end)]
+				let reason = str + `<a style="color: white">${starter}${end}</a><a style="color: yellow">|</a>\n<a style="color: white">${starter}${end}</a>last definition here`
+				return [path.node, new BaseError("ConstantRedefinitionError", `\n${reason}\n\nwhen defining const <a style="color: rgb(0,255,0);">${path.node.identifier.value}</a>\nwhich has been already defined before`, path.$start, path.$end)]
 			}
+			if (path.node.default.datatype.value === '$unknown') {
+				let [str, starter, end] = path.$sourcescript.get_ScriptPortion(path.node.default.$start, path.node.default.$end, "~", "yellow")
+				let reason = str + `<a style="color: white">${starter}${end}</a><a style="color: yellow">|</a>\n<a style="color: white">${starter}${end}</a>type is unknown`
+				return [path.node, new BaseError("ConstantTypeIndistinctError", `\n${reason}\n\nwhen defining const <a style="color: rgb(0,255,0);">${path.node.identifier.value}</a>\na type should be indicated`, path.$start, path.$end)]
+			}
+			iden.typedef = path.node.default.datatype
+			path.node.datatype = path.node.default.datatype
+			// 	if (!typeCheck(path.node.datatype, path.node.default.datatype)) {
+			// 		let [str1, starter1, end1] = path.$sourcescript.get_ScriptPortion(path.node.datatype.$start, path.node.datatype.$end, "~", "yellow")
+			// 		let [str, starter, end] = path.$sourcescript.get_ScriptPortion(path.node.default.$start, path.node.default.$end, "~", "yellow")
+			// 		let reason = str1 + `<a style="color: white">${starter1}${end1}</a><a style="color: yellow">|</a>\n<a style="color: white">${starter1}${end1}</a>defined as <a style="color: yellow">${typeToString(path.node.datatype)}</a>` + '\n\n' + str + `<a style="color: white">${starter}${end}</a><a style="color: yellow">|</a>\n<a style="color: white">${starter}${end}</a>assigned with <a style="color: yellow">${typeToString(path.node.default.datatype)}</a>`
+			// 		return [path.node, new BaseError("TypeCheckError", `\n${reason}\n\nvariable <a style="color: rgb(0,255,0);">${path.node.identifier.value}</a> is type of ${typeToString(path.node.datatype)}\nbut its default value is type of ${typeToString(path.node.default.datatype)} which is not compatible`, path.$start, path.$end)]
+			// 	}
 			return path.node
 		}
 	},
-	assign: {
-		walk(node) {
-			// console.log(">>> vardef visitor walk func", node)
-			return ["identifier", "expression"]
-		},
-		transform(path) {
-			console.log(path.node)
-			if (path.node.identifier.typedef.value === '$unknown') return path.node
-			if (path.node.identifier.$const) {
-				let [str, starter, end] = path.$sourcescript.get_ScriptPortion(path.node.identifier.$start, path.node.identifier.$end, "~", "yellow")
-				// console.log(str)
-				let reason = str + `<a style="color: white">${starter}${end}</a><a style="color: yellow">|</a>\n<a style="color: white">${starter}${end}</a><a style="color: yellow">const</a>`
-				return [path.node, new BaseError("TypeCheckError", `\n${reason}\n\nconst <a style="color: rgb(0,255,0);">${path.node.identifier.value}</a> can not be assigned`, path.$start, path.$end)]
-			}
-			if (path.node.identifier.typedef !== null && !typeCheck(path.node.expression.typedef, path.node.identifier.typedef)) {
-				if (path.node.identifier.type === 'identifier') {
-					let [str1, starter1, end1] = path.$sourcescript.get_ScriptPortion(path.node.identifier.typedef.$start, path.node.identifier.typedef.$end, "~", "yellow")
-					// console.log(str)
-					let [str, starter, end] = path.$sourcescript.get_ScriptPortion(path.node.expression.$start, path.node.expression.$end, "~", "yellow")
-					// console.log(str)
-					let reason = str1 + `<a style="color: white">${starter1}${end1}</a><a style="color: yellow">|</a>\n<a style="color: white">${starter1}${end1}</a>defined as <a style="color: yellow">${typeToString(path.node.identifier.typedef)}</a>` + '\n\n' + str + `<a style="color: white">${starter}${end}</a><a style="color: yellow">|</a>\n<a style="color: white">${starter}${end}</a>assigned with <a style="color: yellow">${typeToString(path.node.expression.typedef)}</a>`
-					return [path.node, new BaseError("TypeCheckError", `\n${reason}\n\nvariable <a style="color: rgb(0,255,0);">${path.node.identifier.value}</a> is type of ${typeToString(path.node.identifier.typedef)} \ntype of ${typeToString(path.node.expression.typedef)} is not compatible`, path.$start, path.$end)]
-				}
-				else {
-					let [str1, starter1, end1] = path.$sourcescript.get_ScriptPortion(path.node.identifier.$start, path.node.identifier.$end, "~", "yellow")
-					// console.log(str)
-					let [str, starter, end] = path.$sourcescript.get_ScriptPortion(path.node.expression.$start, path.node.expression.$end, "~", "yellow")
-					// console.log(str)
-					let reason = str1 + `<a style="color: white">${starter1}${end1}</a><a style="color: yellow">|</a>\n<a style="color: white">${starter1}${end1}</a>type of <a style="color: yellow">${typeToString(path.node.identifier.typedef)}</a>` + '\n\n' + str + `<a style="color: white">${starter}${end}</a><a style="color: yellow">|</a>\n<a style="color: white">${starter}${end}</a>assigned with <a style="color: yellow">${typeToString(path.node.expression.typedef)}</a>`
-					return [path.node, new BaseError("TypeCheckError", `\n${reason}\n\nvariable <a style="color: rgb(0,255,0);">${path.node.identifier.identifier.value}[int]</a> is type of ${typeToString(path.node.identifier.typedef)} \ntype of ${typeToString(path.node.expression.typedef)} is not compatible`, path.$start, path.$end)]
-				}
-			}
-			return path.node
-		}
-	},
+	// arraytype: {
+	// 	walk(node) { },
+	// 	transform(path) {
+	// 		if (path.node.count <= 1) {
+	// 			// let [str1, starter1, end1] = path.$sourcescript.get_ScriptPortion(path.$start, path.$end, "~", "yellow")
+	// 			// let reason = str1
+	// 			return [{ type: "type", value: path.node.value, $start: path.$start, $end: path.$end, $startidx: path.$startidx, $endidx: path.$endidx }, new BaseError("TypeCheckWarning", `size of an array should be bigger than 1\nthis will be assumed as <a style="color: rgb(0, 255,0);">${path.node.value}</a> type`, path.$start, path.$end, { color: 'orange' })]
+	// 		}
+	// 		return path.node
+	// 	}
+	// },
+	// constdef: {
+	// 	walk(node) {
+	// 		// console.log(">>> vardef visitor walk func", node)
+	// 		return ["value"]
+	// 	},
+	// 	transform(path) {
+	// 		// console.log(path.node)
+	// 		let iden = new Identifier(path.node.identifier, "const", path.node, path.node.value.typedef)
+	// 		let [ans, old] = path.$scope.registe(iden)
+	// 		if (!ans) {
+	// 			let [str, starter, end] = path.$sourcescript.get_ScriptPortion(old.def.$start, old.def.$end, "~", "yellow")
+	// 			let reason = str + `<a style="color: white">${starter}${end}</a><a style="color: yellow">|</a>\n<a style="color: white">${starter}${end}</a><a style="color: yellow">last definition of ${old.def.identifier}</a>`
+	// 			return [path.node, new BaseError("VariableRedefinitionError", `\n${reason}\n\nwhen defining var <a style="color: rgb(0,255,0);">${path.node.identifier}</a>\nwhich has been already defined before`, path.$start, path.$end)]
+	// 		}
+	// 		return path.node
+	// 	}
+	// },
+	// assign: {
+	// 	walk(node) {
+	// 		// console.log(">>> vardef visitor walk func", node)
+	// 		return ["identifier", "expression"]
+	// 	},
+	// 	transform(path) {
+	// 		console.log(path.node)
+	// 		if (path.node.identifier.typedef.value === '$unknown') return path.node
+	// 		if (path.node.identifier.$const) {
+	// 			let [str, starter, end] = path.$sourcescript.get_ScriptPortion(path.node.identifier.$start, path.node.identifier.$end, "~", "yellow")
+	// 			// console.log(str)
+	// 			let reason = str + `<a style="color: white">${starter}${end}</a><a style="color: yellow">|</a>\n<a style="color: white">${starter}${end}</a><a style="color: yellow">const</a>`
+	// 			return [path.node, new BaseError("TypeCheckError", `\n${reason}\n\nconst <a style="color: rgb(0,255,0);">${path.node.identifier.value}</a> can not be assigned`, path.$start, path.$end)]
+	// 		}
+	// 		if (path.node.identifier.typedef !== null && !typeCheck(path.node.expression.typedef, path.node.identifier.typedef)) {
+	// 			if (path.node.identifier.type === 'identifier') {
+	// 				let [str1, starter1, end1] = path.$sourcescript.get_ScriptPortion(path.node.identifier.typedef.$start, path.node.identifier.typedef.$end, "~", "yellow")
+	// 				// console.log(str)
+	// 				let [str, starter, end] = path.$sourcescript.get_ScriptPortion(path.node.expression.$start, path.node.expression.$end, "~", "yellow")
+	// 				// console.log(str)
+	// 				let reason = str1 + `<a style="color: white">${starter1}${end1}</a><a style="color: yellow">|</a>\n<a style="color: white">${starter1}${end1}</a>defined as <a style="color: yellow">${typeToString(path.node.identifier.typedef)}</a>` + '\n\n' + str + `<a style="color: white">${starter}${end}</a><a style="color: yellow">|</a>\n<a style="color: white">${starter}${end}</a>assigned with <a style="color: yellow">${typeToString(path.node.expression.typedef)}</a>`
+	// 				return [path.node, new BaseError("TypeCheckError", `\n${reason}\n\nvariable <a style="color: rgb(0,255,0);">${path.node.identifier.value}</a> is type of ${typeToString(path.node.identifier.typedef)} \ntype of ${typeToString(path.node.expression.typedef)} is not compatible`, path.$start, path.$end)]
+	// 			}
+	// 			else {
+	// 				let [str1, starter1, end1] = path.$sourcescript.get_ScriptPortion(path.node.identifier.$start, path.node.identifier.$end, "~", "yellow")
+	// 				// console.log(str)
+	// 				let [str, starter, end] = path.$sourcescript.get_ScriptPortion(path.node.expression.$start, path.node.expression.$end, "~", "yellow")
+	// 				// console.log(str)
+	// 				let reason = str1 + `<a style="color: white">${starter1}${end1}</a><a style="color: yellow">|</a>\n<a style="color: white">${starter1}${end1}</a>type of <a style="color: yellow">${typeToString(path.node.identifier.typedef)}</a>` + '\n\n' + str + `<a style="color: white">${starter}${end}</a><a style="color: yellow">|</a>\n<a style="color: white">${starter}${end}</a>assigned with <a style="color: yellow">${typeToString(path.node.expression.typedef)}</a>`
+	// 				return [path.node, new BaseError("TypeCheckError", `\n${reason}\n\nvariable <a style="color: rgb(0,255,0);">${path.node.identifier.identifier.value}[int]</a> is type of ${typeToString(path.node.identifier.typedef)} \ntype of ${typeToString(path.node.expression.typedef)} is not compatible`, path.$start, path.$end)]
+	// 			}
+	// 		}
+	// 		return path.node
+	// 	}
+	// },
 	array: {
 		walk: (node) => {
-			return ["expressions"];
+			console.log("---------------", node)
+			return ["list"];
 		},
 		transform: (path) => {
-			path.node.typedef = { type: 'arraytype', value: '$unknown', count: path.node.expressions.length };
-			let firsttype = path.node.expressions[0].typedef;
-			let remain = path.node.expressions.slice(1);
+			path.node.datatype = { type: 'datatype', datatype: 'arraytype', value: '$unknown', count: path.node.list.length };
+			if (path.node.list.length === 0) {
+				return path.node;
+			}
+			let firsttype = path.node.list[0].datatype;
+			let remain = path.node.list.slice(1);
 			let pass = true;
 			for (let i = 0; i < remain.length; i++) {
-				if (!typeCheck(firsttype, remain[i].typedef)) {
+				console.info(firsttype, remain[i].datatype)
+				if (!typeCheck(firsttype, remain[i].datatype)) {
 					pass = false;
 					break;
 				}
 			}
-			console.log(pass)
+			console.log(firsttype)
 			if (!pass) {
-				let reasons = path.node.expressions.map((s, i) => {
+				let reasons = path.node.list.map((s, i) => {
 					let [str, starter, end] = path.$sourcescript.get_ScriptPortion(s.$start, s.$end, "~", "yellow")
-					return str + `<a style="color: white">${starter}${end}</a><a style="color: yellow">${typeToString(s.typedef)}</a>`
+					return str + `<a style="color: white">${starter}${end}</a><a style="color: yellow">${typeToString(s.datatype)}</a>`
 				})
 				return [path.node, new BaseError("ArrayDefinitionError", `\n${reasons.join("\n")}\n\nan array can only contain value with the same type`, path.$start, path.$end)]
 			}
 			// console.log(pass, remain, path.node.expressions.length)
-			path.node.typedef.value = firsttype.value;
+			path.node.datatype.value = firsttype;
 			return path.node;
 		}
 	},
-	proc: {
-		walk(node) {
-
-			return []
+	tuple: {
+		walk: (node) => {
+			console.log("---------------", node)
+			return ["list"];
 		},
-		transform(path) {
-			return path.node
+		transform: (path) => {
+			let typelist = path.node.list.map(i => i.datatype)
+			path.node.datatype = { type: 'datatype', datatype: 'tupletype', list: typelist };
+			return path.node;
 		}
 	},
-	value: {
-		walk() { },
-		transform(path) {
-			return {
-				type: 'value',
-				$immediate: true,
-				typedef: { type: "type", value: path.node.datatype },
-				value: path.node.value
-			}
-		}
-	},
+	// proc: {
+	// 	walk(node) {
+
+	// 		return []
+	// 	},
+	// 	transform(path) {
+	// 		return path.node
+	// 	}
+	// },
+	// value: {
+	// 	walk() { },
+	// 	transform(path) {
+	// 		return {
+	// 			type: 'value',
+	// 			$immediate: true,
+	// 			typedef: { type: "type", value: path.node.datatype },
+	// 			value: path.node.value
+	// 		}
+	// 	}
+	// },
 	identifier: {
 		walk(node) {
 		},
 		transform(path) {
+			console.log("identifier", path)
 			let iden = path.$scope.get(path.node.value);
 			if (iden === undefined) {
 				path.node.identype = "$unknown";
 				path.node.$const = false;
-				path.node.typedef = { type: 'type', value: '$unknown' };
+				path.node.datatype = { type: 'datatype', datatype: 'base', value: '$unknown' };
 				path.node.def = undefined;
 				return [path.node, new BaseError("IdentifierUndefinedError", `variable <a style="color: rgb(0,255,0);">${path.node.value}</a> is not defined in this scope`, path.$start, path.$end)]
 			}
 			else {
 				path.node.identype = iden.type;
 				path.node.$const = iden.type === 'const';
-				path.node.typedef = iden.typedef;
+				path.node.datatype = iden.typedef;
 				path.node.def = iden.def;
 			}
 			path.node.$immediate = false;
 			return path.node;
 		}
 	},
-	binop: {
-		walk(node) {
-			// console.log(">>> binop visitor walk func", node)
-			return ["sub"]
-		},
-		transform(path) {
-			// console.log(path.node)
-			const BINOP = {
-				'+': (a, b) => { return a + b },
-				'-': (a, b) => { return a - b },
-				'*': (a, b) => { return a * b },
-				'/': (a, b) => { return a / b },
-			}
-			const TYPEMAP = {
-				"int": (right) => {
-					switch (right) {
-						case "int": return "int";
-						case "real": return "real";
-						case "string": return "string";
-						default: return "$unknown";
-					}
-				},
-				"real": (right) => {
-					switch (right) {
-						case "int": return "real";
-						case "real": return "real";
-						case "string": return "string";
-						default: return "$unknown";
-					}
-				},
-				"string": (right) => {
-					switch (right) {
-						case "int": return "string";
-						case "real": return "string";
-						case "string": return "string";
-						default: return "$unknown";
-					}
-				},
-				"$unknown": (right) => {
-					return "$unknown";
-				}
-			}
-			let type = { type: 'type', value: '$unknown' };
-			if (path.node.sub[0].typedef !== null && path.node.sub[1].typedef !== null) {
-				if (path.node.sub[0].typedef.type !== 'type' || path.node.sub[1].typedef.type !== 'type') {
-					let [str1, starter1, end1] = path.$sourcescript.get_ScriptPortion(path.node.sub[0].$start, path.node.sub[0].$end, "~", "yellow")
-					let [str, starter, end] = path.$sourcescript.get_ScriptPortion(path.node.sub[1].$start, path.node.sub[1].$end, "~", "yellow")
-					let reason = str1 + `<a style="color: white">${starter1}${end1}</a><a style="color: yellow">|</a>\n<a style="color: white">${starter1}${end1}</a>type of <a style="color: yellow">${typeToString(path.node.sub[0].typedef)}</a>` + '\n\n' + str + `<a style="color: white">${starter}${end}</a><a style="color: yellow">|</a>\n<a style="color: white">${starter}${end}</a>type of <a style="color: yellow">${typeToString(path.node.sub[1].typedef)}</a>`
-					return [{
-						type: 'binop',
-						value: path.node.value,
-						$immediate: false,
-						typedef: type,
-						sub: path.node.sub
-					}, new BaseError("OperationError", `\n${reason}\n\narray type is not allowed in bin operation`, path.$start, path.$end)]
-				}
-				else
-					type = { type: "type", value: TYPEMAP[path.node.sub[0].typedef.value](path.node.sub[1].typedef.value) };
-			}
-			if (path.node.sub[0].$immediate && path.node.sub[1].$immediate) {
-				return {
-					type: 'value',
-					$immediate: true,
-					typedef: type,
-					value: BINOP[path.node.value](path.node.sub[0].value, path.node.sub[1].value)
-				}
-			}
-			return {
-				type: 'binop',
-				value: path.node.value,
-				$immediate: false,
-				typedef: type,
-				sub: path.node.sub
-			}
-		}
-	},
-	uniop: {
-		walk(node) {
-			console.log(">>> uni visitor walk func", node)
-			return ["sub"]
-		},
-		transform(path) {
-			// console.log(path.node)
-			let type = { type: 'type', value: '$unknown' };
-			if (path.node.sub[0].typedef !== null) {
-				type = { type: "type", value: (path.node.sub[0].typedef.value) };
-			}
-			if (path.node.sub[0].$immediate) {
-				return {
-					type: 'value',
-					$immediate: true,
-					typedef: type,
-					value: -(path.node.sub[0].value)
-				}
-			}
-			return {
-				type: 'uniop',
-				value: path.node.value,
-				$immediate: false,
-				typedef: type,
-				sub: path.node.sub
-			}
-		}
-	},
-	indexof: {
-		walk: (node) => {
-			console.log(node);
-			return ["identifier", "index"];
-		},
-		transform: (path) => {
-			path.node.typedef = { type: 'type', value: path.node.identifier.typedef.value, $start: path.node.identifier.typedef.$start, $end: path.node.identifier.typedef.$end };
-			if (path.node.identifier.typedef.value === '$unknown') return path.node;
-			if (path.node.identifier.typedef.type !== 'arraytype') {
-				let [str1, starter1, end1] = path.$sourcescript.get_ScriptPortion(path.node.identifier.typedef.$start, path.node.identifier.typedef.$end, "~", "yellow")
-				let reason = str1 + `<a style="color: white">${starter1}${end1}</a><a style="color: yellow">|</a>\n<a style="color: white">${starter1}${end1}</a>defined as <a style="color: yellow">${typeToString(path.node.identifier.typedef)}</a>`
-				return [path.node, new BaseError("TypeCheckError", `\n${reason}\n\nvariable <a style="color: rgb(0,255,0);">${path.node.identifier.value}</a> is type of ${typeToString(path.node.identifier.typedef)}, not array`, path.$start, path.$end)]
-			}
-			else if (path.node.index.typedef.type !== "type" || path.node.index.typedef.value !== 'int') {
-				let [str1, starter1, end1] = path.$sourcescript.get_ScriptPortion(path.node.index.$start, path.node.index.$end, "~", "yellow")
-				let reason = str1 + `<a style="color: white">${starter1}${end1}</a><a style="color: yellow">|</a>\n<a style="color: white">${starter1}${end1}</a>type of <a style="color: yellow">${typeToString(path.node.index.typedef)}</a>`
-				return [path.node, new BaseError("TypeCheckError", `\n${reason}\n\nindex of an array should be <a style="color: rgb(0,255,0);">int</a>`, path.$start, path.$end)]
-			}
-			else if (path.node.index.$immediate && (path.node.index.value < 0 || path.node.index.value >= path.node.identifier.typedef.count)) {
-				let [str1, starter1, end1] = path.$sourcescript.get_ScriptPortion(path.node.index.$start, path.node.index.$end, "~", "yellow")
-				let reason = str1
-				return [path.node, new BaseError("ArrayAccessOutOfBoundError", `\n${reason}\nindex of an array should meet <a style="color: rgb(0,255,0);">0 <= </a>index <a style="color: rgb(0,255,0);"><= ${path.node.identifier.typedef.count - 1}</a>`, path.$start, path.$end)]
-			}
-			return path.node;
-		}
-	},
-	convert: {
-		walk(node) {
-			return ['value']
-		},
-		transform(path) {
-			path.node.typedef = { type: 'type', value: '$unknown' };
-			if (path.node.value.typedef.type !== 'type') {
-				let [str1, starter1, end1] = path.$sourcescript.get_ScriptPortion(path.node.value.$start, path.node.value.$end, "~", "yellow")
-				let reason = str1 + `<a style="color: white">${starter1}${end1}<a style="color: yellow">${typeToString(path.node.value.typedef)}</a>`
-				return [path.node, new BaseError("CanNotCastError", `\n${reason}\n\nexpression is type of ${typeToString(path.node.value.typedef)}\nonly atom type <a style="color: rgb(0,255,0)">int</a>/<a style="color: rgb(0,255,0)">real</a>/<a style="color: rgb(0,255,0)">string</a> can be casted`, path.$start, path.$end)]
-			}
-			// if (path.node.value.typedef.value === '$unknown' ){
-			// 	let [str1, starter1, end1] = path.$sourcescript.get_ScriptPortion(path.node.identifier.typedef.$start, path.node.identifier.typedef.$end, "~", "yellow")
-			// 	let reason = str1 + `<a style="color: white">${starter1}${end1}</a><a style="color: yellow">|</a>\n<a style="color: white">${starter1}${end1}</a>defined as <a style="color: yellow">${typeToString(path.node.identifier.typedef)}</a>`
-			// 	return [path.node, new BaseError("TypeCheckError", `\n${reason}\n\nvariable <a style="color: rgb(0,255,0);">${path.node.identifier.value}</a> is type of ${typeToString(path.node.identifier.typedef)}, not array`, path.$start, path.$end)]
-			// }
-			// if (path.node.value.$immediate === true) {
+	// binop: {
+	// 	walk(node) {
+	// 		// console.log(">>> binop visitor walk func", node)
+	// 		return ["sub"]
+	// 	},
+	// 	transform(path) {
+	// 		// console.log(path.node)
+	// 		const BINOP = {
+	// 			'+': (a, b) => { return a + b },
+	// 			'-': (a, b) => { return a - b },
+	// 			'*': (a, b) => { return a * b },
+	// 			'/': (a, b) => { return a / b },
+	// 		}
+	// 		const TYPEMAP = {
+	// 			"int": (right) => {
+	// 				switch (right) {
+	// 					case "int": return "int";
+	// 					case "real": return "real";
+	// 					case "string": return "string";
+	// 					default: return "$unknown";
+	// 				}
+	// 			},
+	// 			"real": (right) => {
+	// 				switch (right) {
+	// 					case "int": return "real";
+	// 					case "real": return "real";
+	// 					case "string": return "string";
+	// 					default: return "$unknown";
+	// 				}
+	// 			},
+	// 			"string": (right) => {
+	// 				switch (right) {
+	// 					case "int": return "string";
+	// 					case "real": return "string";
+	// 					case "string": return "string";
+	// 					default: return "$unknown";
+	// 				}
+	// 			},
+	// 			"$unknown": (right) => {
+	// 				return "$unknown";
+	// 			}
+	// 		}
+	// 		let type = { type: 'type', value: '$unknown' };
+	// 		if (path.node.sub[0].typedef !== null && path.node.sub[1].typedef !== null) {
+	// 			if (path.node.sub[0].typedef.type !== 'type' || path.node.sub[1].typedef.type !== 'type') {
+	// 				let [str1, starter1, end1] = path.$sourcescript.get_ScriptPortion(path.node.sub[0].$start, path.node.sub[0].$end, "~", "yellow")
+	// 				let [str, starter, end] = path.$sourcescript.get_ScriptPortion(path.node.sub[1].$start, path.node.sub[1].$end, "~", "yellow")
+	// 				let reason = str1 + `<a style="color: white">${starter1}${end1}</a><a style="color: yellow">|</a>\n<a style="color: white">${starter1}${end1}</a>type of <a style="color: yellow">${typeToString(path.node.sub[0].typedef)}</a>` + '\n\n' + str + `<a style="color: white">${starter}${end}</a><a style="color: yellow">|</a>\n<a style="color: white">${starter}${end}</a>type of <a style="color: yellow">${typeToString(path.node.sub[1].typedef)}</a>`
+	// 				return [{
+	// 					type: 'binop',
+	// 					value: path.node.value,
+	// 					$immediate: false,
+	// 					typedef: type,
+	// 					sub: path.node.sub
+	// 				}, new BaseError("OperationError", `\n${reason}\n\narray type is not allowed in bin operation`, path.$start, path.$end)]
+	// 			}
+	// 			else
+	// 				type = { type: "type", value: TYPEMAP[path.node.sub[0].typedef.value](path.node.sub[1].typedef.value) };
+	// 		}
+	// 		if (path.node.sub[0].$immediate && path.node.sub[1].$immediate) {
+	// 			return {
+	// 				type: 'value',
+	// 				$immediate: true,
+	// 				typedef: type,
+	// 				value: BINOP[path.node.value](path.node.sub[0].value, path.node.sub[1].value)
+	// 			}
+	// 		}
+	// 		return {
+	// 			type: 'binop',
+	// 			value: path.node.value,
+	// 			$immediate: false,
+	// 			typedef: type,
+	// 			sub: path.node.sub
+	// 		}
+	// 	}
+	// },
+	// uniop: {
+	// 	walk(node) {
+	// 		console.log(">>> uni visitor walk func", node)
+	// 		return ["sub"]
+	// 	},
+	// 	transform(path) {
+	// 		// console.log(path.node)
+	// 		let type = { type: 'type', value: '$unknown' };
+	// 		if (path.node.sub[0].typedef !== null) {
+	// 			type = { type: "type", value: (path.node.sub[0].typedef.value) };
+	// 		}
+	// 		if (path.node.sub[0].$immediate) {
+	// 			return {
+	// 				type: 'value',
+	// 				$immediate: true,
+	// 				typedef: type,
+	// 				value: -(path.node.sub[0].value)
+	// 			}
+	// 		}
+	// 		return {
+	// 			type: 'uniop',
+	// 			value: path.node.value,
+	// 			$immediate: false,
+	// 			typedef: type,
+	// 			sub: path.node.sub
+	// 		}
+	// 	}
+	// },
+	// indexof: {
+	// 	walk: (node) => {
+	// 		console.log(node);
+	// 		return ["identifier", "index"];
+	// 	},
+	// 	transform: (path) => {
+	// 		path.node.typedef = { type: 'type', value: path.node.identifier.typedef.value, $start: path.node.identifier.typedef.$start, $end: path.node.identifier.typedef.$end };
+	// 		if (path.node.identifier.typedef.value === '$unknown') return path.node;
+	// 		if (path.node.identifier.typedef.type !== 'arraytype') {
+	// 			let [str1, starter1, end1] = path.$sourcescript.get_ScriptPortion(path.node.identifier.typedef.$start, path.node.identifier.typedef.$end, "~", "yellow")
+	// 			let reason = str1 + `<a style="color: white">${starter1}${end1}</a><a style="color: yellow">|</a>\n<a style="color: white">${starter1}${end1}</a>defined as <a style="color: yellow">${typeToString(path.node.identifier.typedef)}</a>`
+	// 			return [path.node, new BaseError("TypeCheckError", `\n${reason}\n\nvariable <a style="color: rgb(0,255,0);">${path.node.identifier.value}</a> is type of ${typeToString(path.node.identifier.typedef)}, not array`, path.$start, path.$end)]
+	// 		}
+	// 		else if (path.node.index.typedef.type !== "type" || path.node.index.typedef.value !== 'int') {
+	// 			let [str1, starter1, end1] = path.$sourcescript.get_ScriptPortion(path.node.index.$start, path.node.index.$end, "~", "yellow")
+	// 			let reason = str1 + `<a style="color: white">${starter1}${end1}</a><a style="color: yellow">|</a>\n<a style="color: white">${starter1}${end1}</a>type of <a style="color: yellow">${typeToString(path.node.index.typedef)}</a>`
+	// 			return [path.node, new BaseError("TypeCheckError", `\n${reason}\n\nindex of an array should be <a style="color: rgb(0,255,0);">int</a>`, path.$start, path.$end)]
+	// 		}
+	// 		else if (path.node.index.$immediate && (path.node.index.value < 0 || path.node.index.value >= path.node.identifier.typedef.count)) {
+	// 			let [str1, starter1, end1] = path.$sourcescript.get_ScriptPortion(path.node.index.$start, path.node.index.$end, "~", "yellow")
+	// 			let reason = str1
+	// 			return [path.node, new BaseError("ArrayAccessOutOfBoundError", `\n${reason}\nindex of an array should meet <a style="color: rgb(0,255,0);">0 <= </a>index <a style="color: rgb(0,255,0);"><= ${path.node.identifier.typedef.count - 1}</a>`, path.$start, path.$end)]
+	// 		}
+	// 		return path.node;
+	// 	}
+	// },
+	// convert: {
+	// 	walk(node) {
+	// 		return ['value']
+	// 	},
+	// 	transform(path) {
+	// 		path.node.typedef = { type: 'type', value: '$unknown' };
+	// 		if (path.node.value.typedef.type !== 'type') {
+	// 			let [str1, starter1, end1] = path.$sourcescript.get_ScriptPortion(path.node.value.$start, path.node.value.$end, "~", "yellow")
+	// 			let reason = str1 + `<a style="color: white">${starter1}${end1}<a style="color: yellow">${typeToString(path.node.value.typedef)}</a>`
+	// 			return [path.node, new BaseError("CanNotCastError", `\n${reason}\n\nexpression is type of ${typeToString(path.node.value.typedef)}\nonly atom type <a style="color: rgb(0,255,0)">int</a>/<a style="color: rgb(0,255,0)">real</a>/<a style="color: rgb(0,255,0)">string</a> can be casted`, path.$start, path.$end)]
+	// 		}
+	// 		// if (path.node.value.typedef.value === '$unknown' ){
+	// 		// 	let [str1, starter1, end1] = path.$sourcescript.get_ScriptPortion(path.node.identifier.typedef.$start, path.node.identifier.typedef.$end, "~", "yellow")
+	// 		// 	let reason = str1 + `<a style="color: white">${starter1}${end1}</a><a style="color: yellow">|</a>\n<a style="color: white">${starter1}${end1}</a>defined as <a style="color: yellow">${typeToString(path.node.identifier.typedef)}</a>`
+	// 		// 	return [path.node, new BaseError("TypeCheckError", `\n${reason}\n\nvariable <a style="color: rgb(0,255,0);">${path.node.identifier.value}</a> is type of ${typeToString(path.node.identifier.typedef)}, not array`, path.$start, path.$end)]
+	// 		// }
+	// 		// if (path.node.value.$immediate === true) {
 
-			// }
-			path.node.$immediate = false;
-			path.node.typedef = path.node.to;
-			return path.node
-		}
-	},
-	proc: {
-		walk(node) {
-			return ["block"]
-		},
-		transform(path) {
-			let iden = new Identifier(path.node.identifier.identifier, "procedure", path.node, path.node.typedef)
-			let [ans, old] = path.$scope.registe(iden)
-			if (!ans) {
-				let [str, starter, end] = path.$sourcescript.get_ScriptPortion(old.def.$start, old.def.$end, "~", "yellow")
-				let reason = str + `<a style="color: white">${starter}${end}</a><a style="color: yellow">|</a>\n<a style="color: white">${starter}${end}</a><a style="color: yellow">last definition of ${old.def.identifier}</a>`
-				return [path.node, new BaseError("IdentifierRedefinitionError", `\n${reason}\n\nwhen defining procedure <a style="color: rgb(0,255,0);">${path.node.identifier.identifier}</a>\nwhich has been already used before`, path.node.identifier.$start, path.node.identifier.$end)]
-			}
-			return path.node
-		}
-	},
-	block: {
-		walk(node) {
-			return ["statments"]
-		},
-		transform(path) {
-			return path.node
-		}
-	},
-	if: {
-		walk(node) {
-			// console.log(node)
-			return ["sub", "else"]
-		},
-		transform(path) {
-			return path.node
-		}
-	},
-	while: {
-		walk(node) {
-			// console.log(node)
-			return ["sub"]
-		},
-		transform(path) {
-			return path.node
-		}
-	},
-	call: {
-		walk(node) {
-			return ["identifier"]
-		},
-		transform(path) {
-			if (path.node.identifier.identype === '$unknown') return path.node;
-			if (path.node.identifier.identype !== 'procedure') {
-				let [str, starter, end] = path.$sourcescript.get_ScriptPortion(path.node.identifier.def.$start, path.node.identifier.def.$end, "~", "yellow")
-				let reason = str + `<a style="color: white">${starter}${end}</a><a style="color: yellow">|</a>\n<a style="color: white">${starter}${end}</a>definition of <a style="color: yellow">${path.node.identifier.value}</a>`
-				return [path.node, new BaseError("UnmatchedProcedureError", `\n${reason}\n\nwhen calling procedure <a style="color: rgb(0,255,0);">${path.node.identifier.value}</a>\nwhich is not a callable procedure`, path.node.identifier.$start, path.node.identifier.$end)]
-			}
-			return path.node
-		}
-	},
-	write: {
-		walk(node) {
-			return ["expressions"]
-		},
-		transform(path) {
-			return path.node
-		}
-	},
-	read: {
-		walk(node) {
-			return ["identifiers"]
-		},
-		transform(path) {
-			return path.node
-		}
-	}
+	// 		// }
+	// 		path.node.$immediate = false;
+	// 		path.node.typedef = path.node.to;
+	// 		return path.node
+	// 	}
+	// },
+	// proc: {
+	// 	walk(node) {
+	// 		return ["block"]
+	// 	},
+	// 	transform(path) {
+	// 		let iden = new Identifier(path.node.identifier.identifier, "procedure", path.node, path.node.typedef)
+	// 		let [ans, old] = path.$scope.registe(iden)
+	// 		if (!ans) {
+	// 			let [str, starter, end] = path.$sourcescript.get_ScriptPortion(old.def.$start, old.def.$end, "~", "yellow")
+	// 			let reason = str + `<a style="color: white">${starter}${end}</a><a style="color: yellow">|</a>\n<a style="color: white">${starter}${end}</a><a style="color: yellow">last definition of ${old.def.identifier}</a>`
+	// 			return [path.node, new BaseError("IdentifierRedefinitionError", `\n${reason}\n\nwhen defining procedure <a style="color: rgb(0,255,0);">${path.node.identifier.identifier}</a>\nwhich has been already used before`, path.node.identifier.$start, path.node.identifier.$end)]
+	// 		}
+	// 		return path.node
+	// 	}
+	// },
+	// block: {
+	// 	walk(node) {
+	// 		return ["statments"]
+	// 	},
+	// 	transform(path) {
+	// 		return path.node
+	// 	}
+	// },
+	// if: {
+	// 	walk(node) {
+	// 		// console.log(node)
+	// 		return ["sub", "else"]
+	// 	},
+	// 	transform(path) {
+	// 		return path.node
+	// 	}
+	// },
+	// while: {
+	// 	walk(node) {
+	// 		// console.log(node)
+	// 		return ["sub"]
+	// 	},
+	// 	transform(path) {
+	// 		return path.node
+	// 	}
+	// },
+	// call: {
+	// 	walk(node) {
+	// 		return ["identifier"]
+	// 	},
+	// 	transform(path) {
+	// 		if (path.node.identifier.identype === '$unknown') return path.node;
+	// 		if (path.node.identifier.identype !== 'procedure') {
+	// 			let [str, starter, end] = path.$sourcescript.get_ScriptPortion(path.node.identifier.def.$start, path.node.identifier.def.$end, "~", "yellow")
+	// 			let reason = str + `<a style="color: white">${starter}${end}</a><a style="color: yellow">|</a>\n<a style="color: white">${starter}${end}</a>definition of <a style="color: yellow">${path.node.identifier.value}</a>`
+	// 			return [path.node, new BaseError("UnmatchedProcedureError", `\n${reason}\n\nwhen calling procedure <a style="color: rgb(0,255,0);">${path.node.identifier.value}</a>\nwhich is not a callable procedure`, path.node.identifier.$start, path.node.identifier.$end)]
+	// 		}
+	// 		return path.node
+	// 	}
+	// },
+	// write: {
+	// 	walk(node) {
+	// 		return ["expressions"]
+	// 	},
+	// 	transform(path) {
+	// 		return path.node
+	// 	}
+	// },
+	// read: {
+	// 	walk(node) {
+	// 		return ["identifiers"]
+	// 	},
+	// 	transform(path) {
+	// 		return path.node
+	// 	}
+	// }
 }
 
 class Identifier {
 	constructor(name, type, def, typedef) {
-		this.name = name,
-			this.type = type,
-			this.def = def,
-			this.typedef = typedef
+		this.name = name
+		this.type = type
+		this.def = def
+		this.typedef = typedef
 	}
 }
 
@@ -3204,14 +3084,14 @@ class Scope {
 }
 
 export class Walker {
-	constructor(ast, visitors, tokens, sourcescript) {
+	constructor(ast, visitors, tokens, sourcescript, immediate_throw = false) {
 		this.ast = ast;
 		this.tokens = tokens;
 		this.sourcescript = sourcescript;
 		this.visitors = visitors;
 		this.scope = new Scope();
 		this.error = [];
-		this.warn = [];
+		this.immediate_throw = immediate_throw
 	}
 
 	create_Node(ast, parent = null) {
@@ -3234,45 +3114,361 @@ export class Walker {
 		if (this.visitors[ast.type] === undefined) {
 			return [ast, this.error]
 		}
-		let subs = this.visitors[ast.type].walk(ast, this.create_Node(ast, parent)) || [];
+		let subs = this.visitors[ast.type].walk(ast, this.create_Node(ast, parent)) ?? [];
 		if (subs !== undefined) {
-			subs.forEach((key) => {
+			for (let key of subs) {
 				let target = ast[key];
-				if (target === undefined || target === null) return;
+				if (target === undefined || target === null) continue;
 				if (target instanceof Array) {
 					let ans = [];
-					target.forEach((t) => {
-						if (t === null || t === undefined) return;
-						let [newast, _] = this.walk(t, ast, this.error);
+					for (let t of target) {
+						if (t === null || t === undefined) continue;
+						let [newast, _] = this.walk(t, ast);
+						if (newast === null && this.immediate_throw) {
+							return [null, this.error]
+						}
 						ans.push(newast);
-					})
+					}
 					ast[key] = ans;
 				}
 				else {
 					let [newast, _] = this.walk(target, ast, this.error);
+					if (newast === null && this.immediate_throw) {
+						return [null, this.error]
+					}
 					ast[key] = newast;
 				}
-			})
+			}
 		}
 
-		let ans = this.visitors[ast.type].transform(this.create_Node(ast, parent));
+		let ans = this.visitors[ast.type].transform(this.create_Node(ast, parent)) ?? ast;
 		let newast;
 		if (ans instanceof Array) {
 			newast = ans[0];
-			ans[0].$start = ast.$start;
-			ans[0].$end = ast.$end;
-			ans[0].$startidx = ast.$startidx;
-			ans[0].$endidx = ast.$endidx;
 			this.error.push(ans[1])
+			if (this.immediate_throw) return [null, this.error]
 		}
 		else {
 			newast = ans;
-			ans.$start = ast.$start;
-			ans.$end = ast.$end;
-			ans.$startidx = ast.$startidx;
-			ans.$endidx = ast.$endidx;
 		}
-		// console.log(ans, ast, "!!!!!")
 		return [newast, this.error];
+	}
+}
+
+// translater
+export class Formatter {
+	constructor(ast) {
+		this.ast = ast;
+		this.target = '';
+		this.uid = BigInt(0);
+		this.colors = {
+			string: '#8bc34a',
+			number: 'orange',
+			keyword: '#e91e63',
+			type: 'tomato',
+			identifier: '#ffd54f',
+			operator: '#03a9f4',
+		}
+	}
+
+	tint(str, type) {
+		return `<span style="color: ${this.colors[type]};">${str}</span>`
+	}
+
+	get_Value(ast) {
+		if (ast.datatype.datatype === 'base') {
+			switch (ast.datatype.value) {
+				case 'string': return this.tint(`"${ast.value}"`, 'string');
+				default: return this.tint(ast.value, 'number');
+			}
+		}
+	}
+
+	typeToString(a) {
+		if (a.datatype === "base") return this.tint(a.value, 'type');
+		else if (a.datatype === "arraytype") return `(${this.typeToString(a.value)})[${a.count === null ? '' : this.tint(a.count, 'number')}]`;
+		else if (a.datatype === "tupletype") {
+			let arr = a.list.map(i => this.typeToString(i))
+			return `${this.tint('(', 'operator')}${arr.join(', ')}${this.tint(')', 'operator')}`
+		}
+		return "$unknown";
+	}
+
+	exp(ast, last = null) {
+		console.log(ast)
+		if (ast.type === 'value') {
+			return this.get_Value(ast)
+		}
+		else if (ast.type === 'funccall') {
+			const MAP = {
+				print: (args, raw) => { `console.log(${args})` },
+				range: (args, raw) => {
+					let uid = this.get_uid()
+					return `(()=>{let arr${uid} = [];for (let i = 1; i <= ${args}; i++) {arr${uid}.push(i)};return arr${uid}})()`
+				}
+			}
+			let args = ast.arguments.map(i => this.exp(i)).join(", ")
+			let func = this.exp(ast.identifier)
+			return MAP[func] !== undefined ? MAP[func](args, ast.arguments) : `${func}(${args})`
+		}
+		else if (ast.type === 'identifier') {
+			return this.tint(ast.value, 'identifier')
+		}
+		else if (ast.type === 'binop') {
+			if (ast.value === '[]') {
+				return `(${this.exp(ast.sub[0], ast.value)}[${this.exp(ast.sub[1], ast.value)}])`
+			}
+			return `(${this.exp(ast.sub[0], ast.value)}${ast.value}${this.exp(ast.sub[1], ast.value)})`
+			// return `${ast.value !== last && last !== null ? '(' : ''}${this.exp(ast.sub[0], ast.value)}${ast.value}${this.exp(ast.sub[1], ast.value)}${ast.value !== last && last !== null ? ')' : ''}`
+		}
+		else if (ast.type === 'uniop') {
+			return `${ast.value !== last && last !== null ? '(' : ''}${ast.value}${this.exp(ast.sub[0], ast.value)}${ast.value !== last && last !== null ? ')' : ''}`
+		}
+		else if (ast.type === 'array') {
+			let items = ast.list.map(i => this.exp(i)).join(', ')
+			return `[${items}]`
+		}
+		else if (ast.type === 'tuple') {
+			let items = ast.list.map(i => this.exp(i)).join(', ')
+			return `[${items}]`
+		}
+	}
+
+	vardef(ast) {
+		return `${this.tint('var', 'keyword')} ${this.tint(ast.identifier.value, 'identifier')} : ${this.typeToString(ast.datatype)} ${ast.default !== null ? `${this.tint('=', 'operator')} ${this.exp(ast.default)}` : ''}`
+	}
+
+	constdef(ast) {
+		return `const ${ast.identifier.value}${ast.default !== null ? ` = ${this.exp(ast.default)}` : ''}`
+	}
+
+	funcdef(ast, func = true) {
+		let args = ast.datatype.from.map(i => i.identifier).join(", ")
+		let body = ast.sub.map(s => this.get(s)).tab()
+		return `${func ? 'function ' : ''}${ast.identifier.value}(${args}) {\n${body}\n}`
+	}
+
+	funccall(ast) {
+		const MAP = {
+			print: 'console.log'
+		}
+		let args = ast.arguments.map(i => this.exp(i)).join(", ")
+		let func = this.exp(ast.identifier)
+		return `${MAP[func] !== undefined ? MAP[func] : func}(${args})`
+	}
+
+	binop(ast, last = null) {
+		return `${ast.value !== last && last !== null ? '(' : ''}${this.exp(ast.sub[0], ast.value)}${ast.value}${this.exp(ast.sub[1], ast.value)}${ast.value !== last && last !== null ? ')' : ''}`
+	}
+
+	uniop(ast, last = null) {
+		return `${ast.value !== last && last !== null ? '(' : ''}${ast.value}${this.exp(ast.sub[0], ast.value)}${ast.value !== last && last !== null ? ')' : ''}`
+	}
+
+	if(ast) {
+		let ifbody = ast.sub.map(s => this.get(s)).tab()
+		let elsebody = ast.else.map(s => this.get(s)).tab()
+		return `if (${this.exp(ast.expression)}) {\n${ifbody}\n}${ast.else.length === 0 ? '' : `\nelse {\n${elsebody}\n}`}`
+	}
+
+	while(ast) {
+		let whilebody = ast.sub.map(s => this.get(s)).tab()
+		return `${ast.tag !== null ? ast.tag + ':\n' : ''}while (${this.exp(ast.expression)}) {\n${whilebody}\n}`
+	}
+
+	classdef(ast) {
+		let uid = this.get_uid()
+		let vardefs = ast.definition ? ast.definition.sub.filter(i => i.type === 'vardef') : []
+		let init = vardefs.map(i => `this.${i.identifier}${i.default !== null ? ` = ${this.exp(i.default)}` : ''}`).tab()
+		let initstr = ['constructor() {', init, '}'].tab()
+		let funcdefs = ast.definition ? ast.definition.sub.filter(i => i.type === 'funcdef').map(i => this.funcdef(i, false)).tab() : ''
+		return `class class${uid} {\n${initstr}\n${funcdefs}\n}\nfunction ${ast.identifier}() {\n    return new class${uid}\n}`
+	}
+
+	for(ast) {
+		let whilebody = ast.sub.map(s => this.get(s)).tab()
+		let index = ast.index === null ? 'i' + this.get_uid() : ast.index
+		let exptag = 'forexp' + this.get_uid()
+		let exp = this.exp(ast.expression)
+		return `let ${exptag} = ${exp}\nfor (let ${index} = 0; ${index} < ${exptag}.length; ${index}++) {\n    let ${ast.tag} = ${exptag}[${index}]\n${whilebody}\n}`
+	}
+
+	return(ast) {
+		return `return ${this.exp(ast.list)}`
+	}
+
+	program(ast) {
+		let sub = ast.sub;
+		sub = sub.map((s) => {
+			return this.get(s);
+		})
+		return `${sub.join('\n')}`;
+	}
+
+	get(s) {
+		return this[s.type] ? this[s.type](s) : 'unknown node'
+	}
+
+	convert() {
+		this.target = this[this.ast.type](this.ast);
+		return this.target;
+	}
+}
+
+export class JSConverter {
+	constructor(ast) {
+		this.ast = ast;
+		this.target = '';
+		this.uid = BigInt(0);
+		this.currentscope = {};
+		this.scope = [this.currentscope];
+	}
+
+	registe_var(name) {
+		if (this.currentscope[name]) { return null }
+		else {
+			let newname = `var_${this.get_uid()}`
+			this.currentscope[name] = newname
+			return name
+		}
+	}
+
+	get_var(name) {
+		return name//this.currentscope[name]
+	}
+
+	get_uid() {
+		return this.uid++;
+	}
+
+	get_Value(ast) {
+		if (ast.datatype.datatype === 'base') {
+			switch (ast.datatype.value) {
+				case 'string': return `"${ast.value}"`;
+				default: return ast.value;
+			}
+		}
+	}
+
+	exp(ast, last = null) {
+		console.log(ast)
+		if (ast.type === 'value') {
+			return this.get_Value(ast)
+		}
+		else if (ast.type === 'funccall') {
+			const MAP = {
+				print: (args, raw) => { `console.log(${args})` },
+				range: (args, raw) => {
+					let uid = this.get_uid()
+					return `(()=>{let arr${uid} = [];for (let i = 1; i <= ${args}; i++) {arr${uid}.push(i)};return arr${uid}})()`
+				}
+			}
+			let args = ast.arguments.map(i => this.exp(i)).join(", ")
+			let func = this.exp(ast.identifier)
+			return MAP[func] !== undefined ? MAP[func](args, ast.arguments) : `${func}(${args})`
+		}
+		else if (ast.type === 'identifier') {
+			const GL = ['print', 'range']
+			if (GL.includes(ast.value)) return ast.value
+			return this.get_var(ast.value)
+		}
+		else if (ast.type === 'binop') {
+			if (ast.value === '[]') {
+				return `(${this.exp(ast.sub[0], ast.value)}[${this.exp(ast.sub[1], ast.value)}])`
+			}
+			return `(${this.exp(ast.sub[0], ast.value)}${ast.value}${this.exp(ast.sub[1], ast.value)})`
+			// return `${ast.value !== last && last !== null ? '(' : ''}${this.exp(ast.sub[0], ast.value)}${ast.value}${this.exp(ast.sub[1], ast.value)}${ast.value !== last && last !== null ? ')' : ''}`
+		}
+		else if (ast.type === 'uniop') {
+			return `${ast.value !== last && last !== null ? '(' : ''}${ast.value}${this.exp(ast.sub[0], ast.value)}${ast.value !== last && last !== null ? ')' : ''}`
+		}
+		else if (ast.type === 'array') {
+			let items = ast.list.map(i => this.exp(i)).join(', ')
+			return `[${items}]`
+		}
+		else if (ast.type === 'tuple') {
+			let items = ast.list.map(i => this.exp(i)).join(', ')
+			return `[${items}]`
+		}
+	}
+
+	vardef(ast) {
+		return `let ${ast.identifier.value}${ast.default !== null ? ` = ${this.exp(ast.default)}` : ''}`
+	}
+
+	constdef(ast) {
+		return `const ${ast.identifier.value}${ast.default !== null ? ` = ${this.exp(ast.default)}` : ''}`
+	}
+
+	funcdef(ast, func = true) {
+		let args = ast.datatype.from.map(i => i.identifier).join(", ")
+		let body = ast.sub.map(s => this.get(s)).tab()
+		return `${func ? 'function ' : ''}${ast.identifier.value}(${args}) {\n${body}\n}`
+	}
+
+	funccall(ast) {
+		const MAP = {
+			print: 'console.log'
+		}
+		let args = ast.arguments.map(i => this.exp(i)).join(", ")
+		let func = this.exp(ast.identifier)
+		return `${MAP[func] !== undefined ? MAP[func] : func}(${args})`
+	}
+
+	binop(ast, last = null) {
+		return `${ast.value !== last && last !== null ? '(' : ''}${this.exp(ast.sub[0], ast.value)}${ast.value}${this.exp(ast.sub[1], ast.value)}${ast.value !== last && last !== null ? ')' : ''}`
+	}
+
+	uniop(ast, last = null) {
+		return `${ast.value !== last && last !== null ? '(' : ''}${ast.value}${this.exp(ast.sub[0], ast.value)}${ast.value !== last && last !== null ? ')' : ''}`
+	}
+
+	if(ast) {
+		let ifbody = ast.sub.map(s => this.get(s)).tab()
+		let elsebody = ast.else.map(s => this.get(s)).tab()
+		return `if (${this.exp(ast.expression)}) {\n${ifbody}\n}${ast.else.length === 0 ? '' : `\nelse {\n${elsebody}\n}`}`
+	}
+
+	while(ast) {
+		let whilebody = ast.sub.map(s => this.get(s)).tab()
+		return `${ast.tag !== null ? ast.tag + ':\n' : ''}while (${this.exp(ast.expression)}) {\n${whilebody}\n}`
+	}
+
+	classdef(ast) {
+		let uid = this.get_uid()
+		let vardefs = ast.definition ? ast.definition.sub.filter(i => i.type === 'vardef') : []
+		let init = vardefs.map(i => `this.${i.identifier}${i.default !== null ? ` = ${this.exp(i.default)}` : ''}`).tab()
+		let initstr = ['constructor() {', init, '}'].tab()
+		let funcdefs = ast.definition ? ast.definition.sub.filter(i => i.type === 'funcdef').map(i => this.funcdef(i, false)).tab() : ''
+		return `class class${uid} {\n${initstr}\n${funcdefs}\n}\nfunction ${ast.identifier}() {\n    return new class${uid}\n}`
+	}
+
+	for(ast) {
+		let whilebody = ast.sub.map(s => this.get(s)).tab()
+		let index = ast.index === null ? 'i' + this.get_uid() : ast.index
+		let exptag = 'forexp' + this.get_uid()
+		let exp = this.exp(ast.expression)
+		return `let ${exptag} = ${exp}\nfor (let ${index} = 0; ${index} < ${exptag}.length; ${index}++) {\n    let ${ast.tag} = ${exptag}[${index}]\n${whilebody}\n}`
+	}
+
+	return(ast) {
+		return `return ${this.exp(ast.list)}`
+	}
+
+	program(ast) {
+		let sub = ast.sub;
+		sub = sub.map((s) => {
+			return this.get(s);
+		})
+		return `${sub.join('\n')}`;
+	}
+
+	get(s) {
+		return this[s.type] ? this[s.type](s) : 'unknown node'
+	}
+
+	convert() {
+		this.target = this[this.ast.type](this.ast);
+		return this.target;
 	}
 }

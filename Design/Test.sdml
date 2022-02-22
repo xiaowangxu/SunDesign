@@ -1,7 +1,16 @@
-<component>
-	<refs>
-		<component id="top" url="/Design/Top.sdml"/>
-	</refs>
-	<refs>
-	</refs>
-</component>
+<refs>
+	<component id="top" url="./Design/Top.sdml"/>
+</refs>
+<inputs>
+	<float name="input0" default="(vec2(1+2).length)"/>
+</inputs>
+<outputs>
+	<vec2 name="input0"/>
+</outputs>
+<template>
+	<box />
+	<box />
+	<box />
+	<box />
+	<top />
+</template>

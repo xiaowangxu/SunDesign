@@ -4,27 +4,28 @@
 	<meta charset="UTF-8">
 	<meta http-equiv="X-UA-Compatible" content="IE=edge">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>Document</title>
+	<title>SunDesign</title>
 </head>
 
 <body>
 
 </body>
 <script type="module">
-	import * as SD from "/SunDesign.js";
+	import { Environment as env } from "./SunDesign.js";
 
-	const env = new SD.Environment({
-		component: SD.ComponentWebLoader,
-	});
+	const ENV = new env();
+	console.log(ENV);
 
-	env.component("test", "/Design/Test.sdml");
-
-	env.onLoaded().then(() => {
-		console.log(">> all components loaded !")
-		env.compile();
+	console.time("compiling")
+	ENV.component("test", "./Design/Test.sdml");
+	Promise.all(ENV.promises).finally(() => {
+		console.timeEnd("compiling");
+	}).then(() => {
+		for (let i in ENV.caches)
+			console.log(ENV.caches[i].summary());
+		// console.warn(ENV.caches)
 	})
 
-	console.log(env);
 </script>
 
 </html>
