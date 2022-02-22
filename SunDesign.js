@@ -1,5 +1,16 @@
 import { typeCheck } from './sPARks.js';
 import { SourceScript, SunDesignExpressionLexer, SunDesignExpressionParser, SunDesignExpressionTypeCheckPass, SunDesignExpressionOptimizationPass, SunDesignExpressionCodeGenPass, typeToString } from './SunDesignExpression.js';
+import "./lib/mermaid.js";
+
+mermaid.initialize({ startOnLoad: false });
+
+function render_Graph(code) {
+	return new Promise((resolve, reject) => {
+		mermaid.render("Graph", code, (svg) => {
+			resolve(svg);
+		});
+	});
+}
 
 function parse(S) {
 	let pos = 0;
@@ -231,6 +242,54 @@ function parse_Constant(str, name = "Source") {
 	const lexer = new SunDesignExpressionLexer(source);
 	lexer.tokenize();
 	if (lexer.errors.length > 0) {
+		return [null, null, lexer.errors.map(err => {
+			let [s, starter] = source.get_ScriptPortion(err.start, err.end, '^', undefined, false)
+			return `${s}\n${starter}${err.type}`
+		})]
+	}
+	const ast = sunlang.match(lexer.tokens);
+	if (ast[3] !== undefined) {
+		const err = ast[3];
+		const errs = [];
+		while (err !== undefined) {
+			errs = err;
+			err = err.last;
+		}
+		const first = errs;
+		const [s, starter] = source.get_ScriptPortion(first.start, first.end, '^', undefined, false)
+		return [null, null, [`${s}\n${starter}${first.type}\n${first.message.split('\n').map(i => starter + i).join('\n')}`]]
+	}
+	else {
+		const walker = SunDesignExpressionTypeCheckPass;
+		const [astnew, err] = walker.walk(source, ast[2][1]);
+		if (err.length > 0) {
+			return [null, null, err.map((err) => {
+				const [s, starter] = source.get_ScriptPortion(err.start, err.end, '^')
+				return `${s}${starter}${err.type}\n${err.message.split('\n').map(i => `${starter}` + `${i}`).join('\n')}`;
+			})]
+		}
+
+		const walker2 = SunDesignExpressionOptimizationPass
+		const [astnew2, err2] = walker2.walk(source, astnew);
+		if (err2.length > 0) {
+			return [null, null, err2.map((err) => {
+				const [s, starter] = source.get_ScriptPortion(err.start, err.end, '^')
+				return `${s}${starter}${err.type}\n${err.message.split('\n').map(i => `${starter}` + `${i}`).join('\n')}`;
+			})]
+		}
+
+		// return [astnew2, []];
+		const walker3 = SunDesignExpressionCodeGenPass
+		const [code, opt] = walker3.generate(astnew2);
+		return [code, opt, []];
+	}
+}
+
+function parse_Expression(str, name = "Source", inputs) {
+	const source = new SourceScript(str, name);
+	const lexer = new SunDesignExpressionLexer(source);
+	lexer.tokenize();
+	if (lexer.errors.length > 0) {
 		return [null, lexer.errors.map(err => {
 			let [s, starter] = source.get_ScriptPortion(err.start, err.end, '^', undefined, false)
 			return `${s}\n${starter}${err.type}`
@@ -250,7 +309,7 @@ function parse_Constant(str, name = "Source") {
 	}
 	else {
 		const walker = SunDesignExpressionTypeCheckPass;
-		const [astnew, err] = walker.walk(source, ast[2][1]);
+		const [astnew, err] = walker.walk(source, ast[2][1], inputs);
 		if (err.length > 0) {
 			return [null, err.map((err) => {
 				const [s, starter] = source.get_ScriptPortion(err.start, err.end, '^')
@@ -455,6 +514,7 @@ class SDML_Component extends SDML_Node {
 		};
 		this.sdml = sdml;
 		this.urlmap = {};
+		this.compile_res = null;
 		this.onready = onready;
 		this.onreject = onreject;
 		this.parse_XML(sdml);
@@ -526,21 +586,20 @@ class SDML_Component extends SDML_Node {
 					throw new Error(`duplcate input found in\n<inputs>\n\t<${type} name="${name}"/>\n</inputs>\nis invalid in ${this.url}`);
 				}
 				else {
-					const [ans, err] = parse_Constant(defaultval);
+					const [code, opt, err] = parse_Constant(defaultval);
 					if (err.length > 0) {
 						throw new Error(`default value parse error in\n<inputs>\n\t<${type} name="${name}"/>\n</inputs>\nin ${this.url}:\n${err.join('\n\n')}`);
 					}
 					const datatype = ALL_INPUTS_TYPES[type].datatype();
-					if (!ans.constant) {
+					if (!opt.constant) {
 						throw new Error(`default value is not constant in\n<inputs>\n\t<${type} name="${name}"/>\n</inputs>\nin ${this.url}`);
 					}
-					if (!typeCheck(datatype, ans.datatype)) {
+					if (!typeCheck(datatype, opt.datatype)) {
 						throw new Error(`default value is type of ${typeToString(ans.datatype)}, not type of ${type} in\n<inputs>\n\t<${type} name="${name}" default="${defaultval}"/>\n</inputs>\nin ${this.url}`);
 					}
-					const codegen = SunDesignExpressionCodeGenPass;
-					const [code, opt] = codegen.generate(ans);
 					// console.log(code, ans.datatype, ans.constant, ans.value, opt)
 					this.inputs[name] = {
+						uid: this.env.uid,
 						default: code,
 						datatype: datatype,
 					}
@@ -567,6 +626,7 @@ class SDML_Component extends SDML_Node {
 				}
 				else {
 					this.outputs[name] = {
+						uid: this.env.uid,
 						datatype: ALL_INPUTS_TYPES[type].datatype(),
 					}
 				}
@@ -629,6 +689,7 @@ class SDML_Component extends SDML_Node {
 			}
 			this.type = type;
 		}
+		this.compile_res = new SDML_Compile_Scope(this.env, this.urlmap, this.xmlast.template, this.inputs, this.outputs, null, {});
 		// console.log(`>>>>> '${this.url}' pre compile pass 2`);
 		// console.log(this.type);
 		// console.log(`>>>>> '${this.url}' compile`);
@@ -638,20 +699,20 @@ class SDML_Component extends SDML_Node {
 	summary() {
 		const inputs = [];
 		for (let key in this.inputs) {
-			inputs.push(`${typeToString(this.inputs[key].datatype)} ${key} = ${this.inputs[key].default}`)
+			inputs.push(`${typeToString(this.inputs[key].datatype)} ${key} = ${this.inputs[key].default} uid: ${this.inputs[key].uid}`)
 		}
 		const outputs = [];
 		for (let key in this.outputs) {
-			outputs.push(`${typeToString(this.outputs[key].datatype)} ${key}`)
+			outputs.push(`${typeToString(this.outputs[key].datatype)} ${key} uid: ${this.outputs[key].uid}`)
 		}
 		const type = [];
 		for (let key in this.type) {
 			type.push(`<${key} /> * ${this.type[key]}`)
 		}
 		return `>| component_${this.uid.toString()}
->| inputs:${inputs.map(i => `\n * ${i}`)}
->| outputs:${outputs.map(i => `\n * ${i}`)}
->| type:${type.map(i => `\n * ${i}`)}`;
+>| inputs:${inputs.map(i => `\n * ${i}`).join("")}
+>| outputs:${outputs.map(i => `\n * ${i}`).join("")}
+>| type:${type.map(i => `\n * ${i}`).join("")}`;
 	}
 }
 
@@ -663,206 +724,186 @@ class SDML_Compile_Error extends Error {
 	}
 }
 
-function compiledChildren_toString(cc) {
-	const ans = [];
-	for (let key in cc) {
-		const subs = cc[key];
-		if (key === '_') {
-			subs.forEach(s => {
-				ans.push(s.type);
-			})
-		}
-		else if (cc[key].length > 0) {
-			ans.push(`<${key}>`);
-			subs.forEach(s => {
-				ans.push(`\t${s.type}`);
-			})
-			ans.push(`<${key} />`);
-		}
+class DepGraphError {
+	constructor(msg, map) {
+		this.msg = msg;
+		this.map = new DepGraph(map).to_Mermaid();
 	}
-	if (ans.length === 0) return ["empty"];
-	return ans;
+
+	toString() {
+		return this.to_String();
+	}
+
+	get graph() {
+		return this.map;
+	}
+
+	to_String() {
+		return `Graph Error: ${this.msg}\nMermaid Code:\n${this.map}`;
+	}
 }
 
-function pattern_toString(pattern) {
-	const ans = [];
-	for (let [main_p, sub_p] of pattern) {
-		if (main_p instanceof Function) {
-			const type = main_p.get_Type();
-			if (sub_p.count === Infinity) {
-				ans.push(`...${type}`);
-			}
-			else
-				for (let i = 0; i < sub_p.count; i++)
-					ans.push(type);
-		}
-		else {
-			ans.push(`<${main_p}>`);
-			const sub = pattern_toString(sub_p);
-			sub.forEach(s => {
-				ans.push(`\t${s}`);
-			})
-			ans.push(`<${main_p} />`);
-		}
-	}
-	return ans;
-}
-
-class SDML_Compiler {
-	constructor(visitors = [
-		new SDML_Inputs_Visitor(),
-		new SDML_Outputs_Visitor(),
-		new SDML_Int_Visitor(),
-		new SDML_Box_Visitor(),
-		new SDML_If_Visitor(),
-		new SDML_For_Visitor(),
-	]) {
-		this.visitors = {};
-		this.graph = null;
-		this.errs = [];
-		this.warns = [];
-		visitors.forEach(v => this.mount_Visitor(v));
+class DepGraph {
+	constructor(map) {
+		this.edges = map ?? new Map();
 	}
 
-	mount_Visitor(visitor) {
-		if (!visitor instanceof SDML_Compiler_Visitor) throw new SDML_Compile_Error("the visitor to be mounted is not type of SDML_Compiler_Visitor class");
-		for (let entry of visitor.entrys) {
-			if (this.visitors[entry] !== undefined) {
-				throw new SDML_Compile_Error("duplicated compile entry name founded");
-			};
-			this.visitors[entry] = visitor;
-		}
+	add_Node(node) {
+		if (!this.edges.has(node))
+			this.edges.set(node, new Set());
 	}
 
-	err(str) {
-		this.errs.push(str);
+	add_Edge(from, to) {
+		this.add_Node(from);
+		this.add_Node(to);
+		const edge = this.edges.get(to);
+		edge.add(from);
 	}
 
-	warn(str) {
-		this.warns.push(str);
-	}
-
-	test_ChildrenPattern(nodes, pattern) {
-		const params = [];
-		let current = [];
-		let i = 0;
-		// debugger;
-		for (let [main_p, sub_p] of pattern) {
-			if (main_p instanceof Function) {
-				if (i >= nodes._.length) return [null, false];
-				while (true) {
-					if (current.length >= sub_p.count) break;
-					const current_input = nodes._[i];
-					if (current_input === undefined) {
-						if (sub_p.count === Infinity) break;
-						return [null, false]
-					};
-					if (current_input.instance_of(main_p)) {
-						current.push(current_input);
-						i++;
-					}
-					else {
-						return [null, false];
-					}
+	get_TopologicalOrder() {
+		const order = [];
+		let flag = false;
+		const edges = new Map(this.edges);
+		edges.forEach((val, key, map) => {
+			map.set(key, new Set(val));
+		})
+		while (edges.size > 0) {
+			flag = false;
+			const entry = [...edges.entries()];
+			entry.forEach(([key, val]) => {
+				if (val.size === 0) {
+					order.push(key);
+					edges.delete(key);
+					edges.forEach(val => val.delete(key));
+					flag = true;
 				}
-				params.push(current);
-				current = [];
-			}
+			})
+			if (!flag)
+				break;
+		}
+		if (edges.size > 0) throw new DepGraphError('fail to sort graph as topological order, one or more circlar references may exist', edges);
+		return order;
+	}
+
+	to_Mermaid() {
+		/**
+		graph LR
+			A[Christmas] -->|Get money| B(Go shopping)
+					B --> C{Let me think}
+			C -->|One| D[Laptop]
+			C -->|Two| E[iPhone]
+			C -->|Three| F[fa:fa-car Car]
+				*/
+		const links = [...this.edges.entries()].map(([key, val]) => {
+			if (val.size === 0) return [`\t${key.toGraphNode()}`]
+			return [...val.entries()].map(([val]) => `\t${val.toGraphNode()} --> ${key.toGraphNode()}`)
+		}).flat(1);
+		return `graph LR\n${links.join("\n")}`;
+	}
+
+}
+
+class SDML_Compile_Scope {
+	constructor(env, urlmap, template, inputs, outputs, parent = null, opt) {
+		this.env = env;
+		this.urlmap = urlmap;
+		this.template = template;
+		this.opt = opt;
+		this.inputs = inputs ?? {};
+		this.outputs = outputs ?? {};
+		this.parent = parent;
+		this.subscope = [this];
+		this.graph = new DepGraph();
+		this.compile();
+	}
+
+	new_Scope(template, parent = this) {
+		const scope = new SDML_Compile_Scope(this.env, this.urlmap, template, this.inputs, this.outputs, parent, this.opt);
+		this.subscope.unshift();
+		return scope;
+	}
+
+	exit_Scope(scope) {
+		if (this.subscope[0] === scope) this.subscope.shift();
+		throw new SDML_Compile_Error(`scope exit error current scope is not the wanted one`);
+	}
+
+	get_NodeInstance(tagName) {
+		if (tagName in ALL_NODE_TYPES) {
+			return new ALL_NODE_TYPES[tagName](this, tagName);
+		}
+		if (tagName in this.urlmap) {
+			const component = this.env.get(this.urlmap[tagName]);
+			// console.log(component);
+			return new SDML_Compiler_Visitor(this, tagName);
+		}
+	}
+
+	walk(nodes = [], parent = null) {
+		nodes.forEach(n => {
+			// add link
+			const name = n.tagName;
+			const child = this.get_NodeInstance(name);
+			if (parent === null) this.graph.add_Node(child);
 			else {
-				const [ans, pass] = this.test_ChildrenPattern({ _: nodes[main_p] }, sub_p);
-				if (!pass) return [null, false];
-				params.push(ans);
+				this.graph.add_Edge(child, parent);
+				this.graph.add_Edge(parent, child);
 			}
-		}
-
-		// console.log(params);
-		if (i < nodes._.length) return [null, false];
-
-		// return [null, false];
-		return [params, true];
+			if (n.children.length > 0) {
+				// console.group(`<${name}>`);
+				this.walk(n.children, child);
+				// console.groupEnd(`<${name}/>`);
+			}
+			// console.log(`<${name}/>`);
+		})
 	}
 
-	walk(node) {
-		const entry = node.tagName;
-		if (entry in this.visitors) {
-			const visitor = this.visitors[entry];
-			if (visitor.inputs !== null) {
-				if (visitor.subs.length > 0) {
-					node.compiled_children = { _: [] };
-					for (let key of visitor.subs) node.compiled_children[key] = [];
-					node.children.forEach(c => {
-						if (c.tagName in node.compiled_children) {
-							const subc = c.children.map(cc => this.walk(cc)).flat();
-							node.compiled_children[c.tagName] = node.compiled_children[c.tagName].concat(subc);
-						}
-						else {
-							const cc = this.walk(c)
-							if (cc !== undefined)
-								node.compiled_children._ = node.compiled_children._.concat(cc);
-						}
-					})
-				}
-				else
-					node.compiled_children = { _: node.children.map(c => this.walk(c)).flat() };
-
-				console.log(entry, "collected", node.compiled_children);
-			}
-			else if (node.children.length !== 0) {
-				this.warn(`sub entrys of node <${entry} /> will be ignored`);
-			}
-			else
-				return visitor.compile(node)
-
-			// children is in compiled_children
-			for (let { pattern, func } of visitor.inputs) {
-				const [ans, pass] = this.test_ChildrenPattern(node.compiled_children, pattern);
-				if (pass) {
-					return func(...ans) ?? [];
-				}
-			}
-
-			const current_input_str = compiledChildren_toString(node.compiled_children).map(l => `| ${l}`).join("\n");
-			let idx = 1;
-			const acceptable = visitor.inputs.map(i => pattern_toString(i.pattern)).map(l => l.map(ll => `| ${ll}`).join("\n")).map(l => `${idx++}.\n${l}`).join("\n\n");
-			this.err(`SDML Compile Error:\nentry <${entry} />'s inputs are not acceptable\n\ncurrent inputs are:\n${current_input_str}\n\ninputs should be like:\n${acceptable}`);
+	compile() {
+		console.log("compile!!!");
+		this.walk(this.template);
+		try {
+			console.warn(this.graph.get_TopologicalOrder());
 		}
-		else {
-			this.warn(`entry <${entry} /> will be ignored`);
-			return [];
+		catch (err) {
+			render_Graph(err.graph).then(svg => {
+				console.log(`${err.to_String()}\nGraph Preview:\n\t%c %c`, `border: black 1px solid; background: url("data:image/svg+xml;base64,${btoa(svg)}") no-repeat center; padding: 80px 240px; background-size: contain;`, "");
+			})
+			// console.log(err.to_String());
 		}
-	}
-
-	compile(component, graph) {
-		if (!component instanceof SDML_Node) throw new SDML_Compile_Error("the compile input should be a SDML_Node")
-		component.compiled_children = component.children.forEach(c => this.walk(c));
-		this.errs.forEach(e => console.error(e));
-		this.warns.forEach(w => console.warn(w));
+		// console.log(this.graph.to_Mermaid());
 	}
 }
 
 class SDML_Compiler_Visitor {
-	constructor(tagname, entrys = [], subs = []) {
-		this.name = tagname;
-		this.entrys = entrys instanceof Array ? entrys : [entrys];
-		if (this.entrys.length === 0) this.entrys = [this.name];
-		this.subs = subs;
-		this.inputs = null;
-		this.outputs = null;
+	constructor(scope, name) {
+		this.scope = scope;
+		this.name = name;
+		this.uid = scope.env.uid;
 	}
 
 	compile() {
 		console.log(this);
 	}
 
-	to_String(subs) {
+	toGraphNode() {
+		return `Node${this.uid}(${this.name} uid:${this.uid})`;
+	}
+
+	toString() {
+		return `${this.name}_${this.uid}`;
+	}
+
+	to_String(subs = []) {
 		return `<${this.name}>\n${subs.map(s => '\t' + s).join('\n')}\n</${this.name}>`
 	}
 
 	static get type() {
-		return 'unknown';
+		return 'visitor';
 	}
 }
 
 const ALL_NODE_TYPES = {
-	box: SDML_Compiler_Visitor
+	box: SDML_Compiler_Visitor,
+	circle: SDML_Compiler_Visitor,
+	if: SDML_Compiler_Visitor,
 }

@@ -5,18 +5,14 @@
 </inputs>
 <type>
 	<geo/>
-	<unknown count="100"/>
 </type>
 <template>
 	<box>
 		<if>
-			<int name="input0" default="10"/>
-			<else>
-				<for>
-					<int name="input0" default="10"/>
-					<int name="input0" default="10"/>
-				</for>
-			</else>
+			<circle name="input0" default="10"/>
 		</if>
+		<box>
+			<circle/>
+		</box>
 	</box>
 </template>

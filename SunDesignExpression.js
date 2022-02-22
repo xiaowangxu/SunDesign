@@ -2753,8 +2753,9 @@ class CodeGenPass {
 		return opt.INPUTS ? `${opt.INPUTS}.${ast.value}` : ast.value;
 	}
 
-	generate(ast, opt = { constant: false, deps: new Set(), ids: new Set(), THREE: 'ENV.THREE', FUNCS: 'ENV.FUNCS', INPUTS: 'INPUTS' }) {
+	generate(ast, opt = { constant: false, deps: new Set(), ids: new Set(), datatype: { type: 'datatype', datatype: 'base', value: 'unknown' }, THREE: 'ENV.THREE', FUNCS: 'ENV.FUNCS', INPUTS: 'INPUTS' }) {
 		opt.constant = ast.constant ? true : false;
+		opt.datatype = ast.datatype ?? opt.datatype;
 		return [this.walk(ast, opt), opt];
 	}
 }
