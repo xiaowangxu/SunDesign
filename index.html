@@ -25,12 +25,13 @@
 
 	console.time("compiling")
 	ENV.component("test", "./Design/Test.sdml");
-	Promise.all(ENV.promises).finally(() => {
-		console.timeEnd("compiling");
-	}).then(() => {
+	Promise.all(ENV.promises).then(() => {
+		console.log(ENV.generate());
 		// for (let i in ENV.caches)
 		// console.log(ENV.caches[i].summary());
 		// console.warn(ENV.caches)
+	}).finally(() => {
+		console.timeEnd("compiling");
 	})
 
 </script>

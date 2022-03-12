@@ -6,13 +6,10 @@ const BASE =
         this.i = i ?? {};
         this.r = null;
     }
-
     init(c, s) {
     }
-
     update(i, c, s) {
     }
-
     dispose() {
     }
 }`

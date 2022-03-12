@@ -5,7 +5,6 @@ export const TAG_Number_0 =
         super(i ?? { n: 0 });
         this.init(c, s);
     }
-
     init(c, s) {
         console.log()
         this.r = {
@@ -13,7 +12,6 @@ export const TAG_Number_0 =
             e: {}
         }
     }
-
     update(i, c, s) {
         const last_inputs = this.i;
         this.i = i;
@@ -21,7 +19,6 @@ export const TAG_Number_0 =
             this.r.n.float[0] = i.n;
         }
     }
-
     dispose() {
     }
 }`}

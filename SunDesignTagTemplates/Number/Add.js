@@ -5,7 +5,6 @@ export const TAG_Add_0 =
         super();
         this.init(c, s);
     }
-
     init(c, s) {
         const ans = c.default.float.reduce((f, sum) => sum += f, 0);
         this.r = {
@@ -13,12 +12,10 @@ export const TAG_Add_0 =
             e: {}
         }
     }
-
     update(i, c, s) {
         const last_inputs = this.i;
         this.i = i;
     }
-
     dispose() {
     }
 }`}

@@ -2779,6 +2779,7 @@ export const SunDesignCodeGenPassVisitor = {
 	float: (val) => val,
 	string: (val) => val,
 	'+': (a, b) => `(${a} + ${b})`,
+	'*': (a, b) => `(${a} * ${b})`,
 	vec2: (val, opt, codegen) => {
 		const x = codegen.walk(val.x, opt);
 		const y = codegen.walk(val.y, opt);

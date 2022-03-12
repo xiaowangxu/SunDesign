@@ -455,6 +455,11 @@ export class Environment {
 	get uid() {
 		return this.uidgen++;
 	}
+
+	generate() {
+		const codes = [...this.used_templates.values()];
+		return `${SDML_Templates.BASE}\n${codes.join('\n\n')}`;
+	}
 }
 
 class SDML_Node {
@@ -531,6 +536,7 @@ const ALL_INPUTS_TYPES = {
 class SDML_Component extends SDML_Node {
 	constructor(env, url, sdml, onready, onreject) {
 		super(env);
+		this.class_name = `component_Component_${this.uid}`;
 		this.url = url;
 		this.xmlast = {
 			refs: null,
@@ -752,23 +758,24 @@ class SDML_Component extends SDML_Node {
 			}
 			this.types = type;
 		}
-		try {
-			this.compile_res = new SDML_Compile_Scope(this.env, this.urlmap, this.xmlast.template, this.inputs, this.outputs, this.slots, null, {});
-			if (!this.types.match_Types(this.compile_res.types, false, true)) {
-				throw new Error(`types do not match:\nthe desired types are:\n${this.types.to_List().map(i => `* ${i}`).join("\n")}\nbut the compiled results are:\n${this.compile_res.types.to_List().map(i => `* ${i}`).join("\n")}`);
-			}
-			this.types = this.compile_res.types;
-			render_Graph(this.compile_res.to_Mermaid()).then(svg => {
-				console.log(`Graph Preview:\n\t%c %c`, `border: black 1px solid; background: url("data:image/svg+xml;base64,${btoa(svg)}") no-repeat center; padding: 180px 180px; background-size: contain;`, "");
-			})
-			const codegen = new SDML_Compile_CodeGen(this.env, `component_Component_${this.uid}`, this.compile_res);
-			console.log(codegen.generate());
-			// }
-			// console.log(this.compile_res.to_Mermaid())
+		// try {
+		this.compile_res = new SDML_Compile_Scope(this.env, this.urlmap, this.xmlast.template, this.inputs, this.outputs, this.slots, null, {});
+		if (!this.types.match_Types(this.compile_res.types, false, true)) {
+			throw new Error(`types do not match:\nthe desired types are:\n${this.types.to_List().map(i => `* ${i}`).join("\n")}\nbut the compiled results are:\n${this.compile_res.types.to_List().map(i => `* ${i}`).join("\n")}`);
 		}
-		catch (err) {
-			throw new Error(`${err.message}\nin ${this.url}`);
-		}
+		this.types = this.compile_res.types;
+		const mermaid = this.compile_res.to_Mermaid();
+		console.log(mermaid);
+		render_Graph(mermaid).then(svg => {
+			console.log(`Graph Preview:\n\t%c %c`, `border: black 1px solid; background: url("data:image/svg+xml;base64,${btoa(svg)}") no-repeat center; padding: 180px 180px; background-size: contain;`, "");
+		})
+		const codegen = new SDML_Compile_CodeGen(this.env, this.class_name, this.compile_res);
+		const code = codegen.generate();
+		this.env.add_Template(this.class_name, code);
+		// }
+		// catch (err) {
+		// 	throw new Error(`${err.message}\nin ${this.url}`);
+		// }
 	}
 
 	get_Entries() {
@@ -1394,11 +1401,22 @@ class SDML_Compile_Scope {
 		for (const id in this.nodemap) {
 			const node = this.nodemap[id];
 			const deps = node.deps;
-			deps.forEach(input => link.push(`Input_${this.uid}_${input} --> |dep| Node_${node.uid}`));
+			deps.forEach(input => link.push(`Input_${input} --> |dep| Node_${node.uid}`));
 		}
 		for (const input in this.inputs) {
-			if (!this.parent || !(input in this.parent.inputs))
-				inputs.push(`Input_${this.uid}_${input}[(${input})]`)
+			let flag = true;
+			let cnt = this
+			while (true) {
+				if (cnt === null) break;
+				if (!cnt.parent || !(input in cnt.parent.inputs));
+				else {
+					flag = false;
+					break;
+				}
+				cnt = cnt.parent;
+			}
+			if (flag)
+				inputs.push(`Input_${input}((${input}))`)
 		}
 		for (const slot in this.slots) {
 			if (!this.parent || !(slot in this.parent.slots))
@@ -1520,6 +1538,10 @@ class SDML_Compiler_Visitor {
 	}
 
 	// codegen
+	generate(parent_codegen) {
+
+	}
+
 	get_NewNode(codegen) {
 		return 'ComponentBase';
 	}
@@ -1838,8 +1860,8 @@ class SDML_If extends SDML_Compiler_Visitor {
 	static inputs = Types.IGNORE;
 
 	to_Mermaid(ans, link) {
-		let str = `subgraph Scope_${this.uid}`;
-		str += `\nNode_${this.uid}(if id=${this.id})`;
+		let str = `Node_${this.uid}(if id=${this.id})`;
+		str += `\nsubgraph Scope_${this.uid}`;
 		if (this.true_scope) {
 			const [nodes, links] = this.true_scope.$to_Mermaid([], link);
 			str += `\nsubgraph If_${this.uid}_true\n${nodes}\nend\nstyle If_${this.uid}_true fill:#dbf8db`;
@@ -1889,7 +1911,7 @@ class SDML_For extends SDML_Compiler_Visitor {
 		if (!test_IdentifierName(this.iter)) {
 			throw new SDML_Compile_Error(`in node <for id="${this.id}" iter="${this.iter}"/> is invalid identifier name`);
 		}
-		this.for_loop = this.scope.new_Scope(ast.children, { [this.iter]: { uid: this.scope.env.uid, default: '', datatype: this.params.array.opt.datatype.value } });
+		this.for_loop = this.scope.new_Scope(ast.children, { [this.iter]: { uid: this.scope.env.uid, default: 'null', datatype: this.params.array.opt.datatype.value } });
 		this.types = this.for_loop.types.clone().make_Infinity();
 	}
 
@@ -1897,8 +1919,8 @@ class SDML_For extends SDML_Compiler_Visitor {
 	static inputs = Types.IGNORE;
 
 	to_Mermaid(ans, link) {
-		let str = `subgraph Scope_${this.uid}`;
-		str += `\nNode_${this.uid}(for id=${this.id})`;
+		let str = `Node_${this.uid}(for id=${this.id})`;
+		str += `\nsubgraph Scope_${this.uid}`;
 		if (this.for_loop) {
 			const [nodes, links] = this.for_loop.$to_Mermaid([], link);
 			str += `\n${nodes}`;
@@ -1916,6 +1938,41 @@ class SDML_For extends SDML_Compiler_Visitor {
 		this.types.type_names.forEach(type => {
 			collection.add(param, type, this)
 		})
+	}
+
+	generate(parent_codegen) {
+		const codegen = new SDML_Compile_CodeGen(parent_codegen.env, `closure_For_${this.uid}`, this.for_loop, {});
+		const code = codegen.generate();
+		codegen.env.add_Template(`closure_For_${this.uid}`, code);
+		const types = Object.keys(this.for_loop.collection.get('default'));
+		const for_code = create_Component(
+			// class_name
+			`component_For_${this.uid}`,
+			// default_inputs
+			`{array:[]}`,
+			// nodes decl
+			['this.nodes_array = [];'],
+			// params decl
+			['this.array = null;'],
+			// params init
+			['this.array = this.i.array;'],
+			// nodes init
+			[`this.r = {n: {${types.map(i => `${i}: []`).join(', ')}}, e: {}};`,
+				'for (const iter of this.array) {',
+			`	const node = new closure_For_${this.uid}({...this.i, ${this.iter}: iter}, {}, {})`,
+				'	this.nodes_array.push(node);',
+			...types.map(t => {
+				return `\tthis.r.n.${t}.push(...node.r.n.${t});`
+			}),
+				'}'],
+			undefined,
+			['for (const node of this.nodes_array) {', '	node.dispose()', '}']
+		);
+		codegen.env.add_Template(`component_For_${this.uid}`, for_code);
+	}
+
+	get_NewNode() {
+		return `component_For_${this.uid}`;
 	}
 
 	get_Type() {
@@ -2123,6 +2180,33 @@ class SDML_Number extends SDML_Compiler_Visitor {
 	}
 }
 
+function create_Component(class_name,
+	default_inputs = '{}',
+	nodes_decl = [],
+	params_decl = [],
+	params_init = [],
+	nodes_init = [],
+	result,
+	nodes_dispose) {
+	return `class ${class_name} extends ComponentBase {
+	constructor(i, c, s) {
+		super(i ?? ${default_inputs});
+		this.r = null;
+${nodes_decl.map(s => `\t\t${s}`).join('\n')}
+${params_decl.map(s => `\t\t${s}`).join('\n')}
+		this.init(c, s);
+	}
+	init(c, s) {
+${params_init.map(s => `\t\t${s}`).join('\n')}
+${nodes_init.map(s => `\t\t${s}`).join('\n')}${result === undefined ? '' : `\n		this.r = ${result}`};
+	}
+	update(i, c, s) {
+	}
+	dispose() {
+${nodes_dispose.map(s => `\t\t${s}`).join('\n')}
+	}
+}`
+}
 class SDML_Compile_CodeGen {
 	constructor(env, class_name, scope, opt) {
 		this.opt = { ...opt };
@@ -2222,6 +2306,7 @@ class SDML_Compile_CodeGen {
 
 	generate() {
 		for (const node of this.scope.order) {
+			node.generate(this);
 			this.nodes.set(node, `node_${node.uid}`);
 			const map = {};
 			this.params.set(node, map);
@@ -2230,25 +2315,33 @@ class SDML_Compile_CodeGen {
 			}
 			// console.log(this.get_NodeInputs(node));
 		}
-		return `class ${this.class_name} extends ComponentBase {
-	constructor(i, c, s) {
-        super(i ?? ${this.get_DefaultInputs()});
-        this.result = null;
-${this.get_NodesDeclaration().map(s => `\t\t${s}`).join('\n')}
-${this.get_ParamsDeclaration().map(s => `\t\t${s}`).join('\n')}
-        this.init(c, s);
-    }
-	init(c, s) {
-${this.get_ParamsInit().map(s => `\t\t${s}`).join('\n')}
-${this.get_NodesInit().map(s => `\t\t${s}`).join('\n')}
-		this.r = ${this.get_Result()};
-	}
-	update(i, c, s) {
-	}
-	dispose() {
-
-	}
-}`
+		return create_Component(this.class_name,
+			this.get_DefaultInputs(),
+			this.get_NodesDeclaration(),
+			this.get_ParamsDeclaration(),
+			this.get_ParamsInit(),
+			this.get_NodesInit(),
+			this.get_Result(),
+			[...this.nodes.values()].map(i => `this.${i}.dispose()`))
+		// 		`class ${this.class_name} extends ComponentBase {
+		// 	constructor(i, c, s) {
+		//         super(i ?? ${this.get_DefaultInputs()});
+		//         this.r = null;
+		// ${this.get_NodesDeclaration().map(s => `\t\t${s}`).join('\n')}
+		// ${this.get_ParamsDeclaration().map(s => `\t\t${s}`).join('\n')}
+		//         this.init(c, s);
+		//     }
+		// 	init(c, s) {
+		// ${this.get_ParamsInit().map(s => `\t\t${s}`).join('\n')}
+		// ${this.get_NodesInit().map(s => `\t\t${s}`).join('\n')}
+		// 		this.r = ${this.get_Result()};
+		// 	}
+		// 	update(i, c, s) {
+		// 	}
+		// 	dispose() {
+		// ${[...this.nodes.values()].map(i => `\t\tthis.${i}.dispose()`).join('\n')}
+		// 	}
+		// }`
 	}
 }
 

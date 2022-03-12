@@ -1,19 +1,17 @@
 <refs>
 </refs>
 <inputs>
-	<float name="input0" default="1.0"/>
+	<float name="input0" default="2.0"/>
+	<bool name="input2" default="true"/>
 </inputs>
 <outputs>
 	<vec2 name="input0"/>
 </outputs>
 <template>
 	<add>
-		<add>
-			<num n="input0"/>
-			<num n="input0 + 1"/>
-			<num n="input0 + 2"/>
-			<num n="input0 + 3"/>
-		</add>
-		<num n="100"/>
+		<for array="[1.0, input0]" iter="num">
+			<num n="num * 2"/>
+		</for>
+		<num n="4"/>
 	</add>
 </template>
