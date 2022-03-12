@@ -1,8 +1,6 @@
 import { typeCheck } from './sPARks.js';
 import { SourceScript, SunDesignExpressionLexer, SunDesignExpressionParser, SunDesignExpressionTypeCheckPass, SunDesignExpressionOptimizationPass, SunDesignExpressionCodeGenPass, typeToString } from './SunDesignExpression.js';
 import "./lib/mermaid.js";
-import * as SDML_Templates from './SunDesignTagTemplates/templates.js';
-console.log(SDML_Templates);
 
 mermaid.initialize({ startOnLoad: false });
 
@@ -329,7 +327,7 @@ function parse_Expression(str, name = "Source", inputs, nodes) {
 		}
 
 		const walker3 = SunDesignExpressionCodeGenPass
-		const [code, opt] = walker3.generate(astnew2, { INPUTS: 'this.i' });
+		const [code, opt] = walker3.generate(astnew2);
 		return [code, opt, []];
 	}
 }
@@ -405,7 +403,6 @@ export class Environment {
 		this.promises = [];
 		loaders = { component: ComponentWebLoader, ...loaders };
 		this.loaders = {};
-		this.used_templates = new Map();
 		for (let key in loaders) {
 			this.loaders[key] = new loaders[key](this);
 		}
@@ -448,10 +445,6 @@ export class Environment {
 		return this.caches[url];
 	}
 
-	add_Template(name, code) {
-		this.used_templates.set(name, code);
-	}
-
 	get uid() {
 		return this.uidgen++;
 	}
@@ -487,45 +480,33 @@ class SDML_Node {
 	get_InputTypes() {
 		return Types.NONE;
 	}
-
-	get_ExportsTypes() {
-		return Types.NONE;
-	}
 }
 
 const ALL_INPUTS_TYPES = {
 	int: {
 		default: (val) => { return val },
-		datatype: () => ExpTypes.base(ExpTypes.int)
+		datatype: () => create_BaseType('int')
 	},
 	float: {
 		default: (val) => { return val },
-		datatype: () => ExpTypes.base(ExpTypes.float)
+		datatype: () => create_BaseType('float')
 	},
 	bool: {
 		default: (val) => { return val },
-		datatype: () => ExpTypes.base(ExpTypes.bool)
-	},
-	string: {
-		default: (val) => { return val },
-		datatype: () => ExpTypes.base(ExpTypes.string)
+		datatype: () => create_BaseType('bool')
 	},
 	vec2: {
 		default: (val) => { return val },
-		datatype: () => ExpTypes.base(ExpTypes.vec2)
+		datatype: () => create_BaseType('vec2')
 	},
-	vec3: {
-		default: (val) => { return val },
-		datatype: () => ExpTypes.base(ExpTypes.vec3)
-	},
-	euler: {
-		default: (val) => { return val },
-		datatype: () => ExpTypes.base(ExpTypes.vec3)
-	},
-	mat4: {
-		default: (val) => { return val },
-		datatype: () => ExpTypes.base(ExpTypes.mat4)
-	},
+}
+
+function create_BaseType(type) {
+	return {
+		type: 'datatype',
+		datatype: 'base',
+		value: type
+	}
 }
 
 class SDML_Component extends SDML_Node {
@@ -545,7 +526,6 @@ class SDML_Component extends SDML_Node {
 		this.urlmap = {};
 		this.slots = {};
 		this.compile_res = null;
-		this.types = null;
 		this.onready = onready;
 		this.onreject = onreject;
 		this.parse_XML(sdml);
@@ -627,7 +607,7 @@ class SDML_Component extends SDML_Node {
 						throw new Error(`default value is not constant in\n<inputs>\n\t<${type} name="${name}"/>\n</inputs>\nin ${this.url}`);
 					}
 					if (!typeCheck(datatype, opt.datatype)) {
-						throw new Error(`default value is type of ${typeToString(opt.datatype)}, not type of ${type} in\n<inputs>\n\t<${type} name="${name}" default="${defaultval}"/>\n</inputs>\nin ${this.url}`);
+						throw new Error(`default value is type of ${typeToString(ans.datatype)}, not type of ${type} in\n<inputs>\n\t<${type} name="${name}" default="${defaultval}"/>\n</inputs>\nin ${this.url}`);
 					}
 					// console.log(code, ans.datatype, ans.constant, ans.value, opt)
 					this.inputs[name] = {
@@ -682,21 +662,21 @@ class SDML_Component extends SDML_Node {
 				throw new Error(`reserved tagName '${name}' found in\n<refs>\n\t<${ref.tagName} id="${id}" />\n</refs>\nin ${this.url}`);
 			}
 			else {
-				const slot = new Types();
+				const slot = {};
 				for (let t of i.children) {
 					const type = t.tagName;
 					const { count } = t.attributes;
 					if (count === undefined) {
-						slot.merge_TypesLocal(new Types({ [type]: Infinity }));
+						slot[type] = Infinity;
 					}
 					else if (test_Number(count)) {
-						slot.merge_TypesLocal(new Types({ [type]: parseInt(count) }));
+						slot[type] = (slot[type] ?? 0) + parseInt(count);
 					}
 					else {
 						throw new Error(`slot's type's count '${count}' in\n<slots>\n\t<${name}>\n\t\t<${type} count="${count}"/>\n\t</${name}></slots>\nis invalid in ${this.url}`)
 					}
 				}
-				this.slots[name] = { types: slot };
+				this.slots[name] = slot;
 			}
 		}
 
@@ -724,14 +704,14 @@ class SDML_Component extends SDML_Node {
 					if (subcom === null) {
 						throw new Error(`possible circular refs found in ${this.url} when referencing ${this.urlmap[name]} as ${name}`);
 					}
-					cut_type = subcom.types.clone();
+					cut_type = subcom.type.clone();
 				}
 				else {
 					throw new Error(`type of node <${name}/> can not but directly resolved in\n<template>\n\t<${name}/>\n</template>\nin ${this.url}\nyou may want to use <type/> entry to define component's type explicitly`);
 				}
 				type.merge_TypesLocal(cut_type);
 			}
-			this.types = type;
+			this.type = type;
 		}
 		else {
 			// use def type
@@ -750,42 +730,27 @@ class SDML_Component extends SDML_Node {
 					throw new Error(`type's count '${count}' in\n<type>\n\t<${name} count="${count}"/>\n</type>\nis invalid in ${this.url}`)
 				}
 			}
-			this.types = type;
+			this.type = type;
 		}
-		try {
-			this.compile_res = new SDML_Compile_Scope(this.env, this.urlmap, this.xmlast.template, this.inputs, this.outputs, this.slots, null, {});
-			if (!this.types.match_Types(this.compile_res.types, false, true)) {
-				throw new Error(`types do not match:\nthe desired types are:\n${this.types.to_List().map(i => `* ${i}`).join("\n")}\nbut the compiled results are:\n${this.compile_res.types.to_List().map(i => `* ${i}`).join("\n")}`);
-			}
-			this.types = this.compile_res.types;
-			render_Graph(this.compile_res.to_Mermaid()).then(svg => {
-				console.log(`Graph Preview:\n\t%c %c`, `border: black 1px solid; background: url("data:image/svg+xml;base64,${btoa(svg)}") no-repeat center; padding: 180px 180px; background-size: contain;`, "");
-			})
-			const codegen = new SDML_Compile_CodeGen(this.env, `component_Component_${this.uid}`, this.compile_res);
-			console.log(codegen.generate());
-			// }
-			// console.log(this.compile_res.to_Mermaid())
-		}
-		catch (err) {
-			throw new Error(`${err.message}\nin ${this.url}`);
-		}
+		// try {
+		this.compile_res = new SDML_Compile_Scope(this.env, this.urlmap, this.xmlast.template, this.inputs, this.outputs, null, {});
+		this.type = this.compile_res.types;
+		// console.log(this.compile_res.to_Mermaid())
+		render_Graph(this.compile_res.to_Mermaid()).then(svg => {
+			console.log(`Graph Preview:\n\t%c %c`, `border: black 1px solid; background: url("data:image/svg+xml;base64,${btoa(svg)}") no-repeat center; padding: 180px 180px; background-size: contain;`, "");
+		})
+		// }
+		// catch (err) {
+		// 	throw new Error(`${err.message}\nin ${this.url}`);
+		// }
 	}
 
 	get_Entries() {
-		return Object.keys(this.slots);
+		return [];
 	}
 
 	get_InputTypes() {
-		const slots = {};
-		for (const slot in this.slots) {
-			slots[slot] = this.slots[slot].types;
-		}
-		return {
-			default: {
-				default: new Types(),
-				...slots
-			}
-		};
+		return new Types();
 	}
 
 	summary() {
@@ -798,7 +763,7 @@ class SDML_Component extends SDML_Node {
 			outputs.push(`${typeToString(this.outputs[key].datatype)} ${key} uid: ${this.outputs[key].uid}`)
 		}
 		const type = [];
-		for (let item of this.types.to_List()) {
+		for (let item of this.type.to_List()) {
 			type.push(item);
 		}
 		return `>| component_${this.uid.toString()} url: ${this.url}
@@ -971,33 +936,19 @@ class Types {
 		return _a;
 	}
 
-	match_Types(types, inf = false, ext = false) {
-		if (types.is_Empty()) return this.types === types.types;
-		if (this.is_Empty()) {
-			for (let key in types.types) {
-				const count_a = types.types[key];
-				if (count_a !== Infinity) return false;
-			}
-			return true;
+	match_Types(types, inf = false) {
+		if (this.is_Empty() || types.is_Empty()) return this.types === types.types;
+		const map = this.to_Map();
+		for (let key in types.types) {
+			const count_a = types.types[key];
+			if (!map.has(key)) return false;
+			const count_b = map.get(key);
+			if (inf && count_a === Infinity);
+			else if (count_a !== count_b) return false;
+			map.delete(key);
 		}
-		else {
-			const map = this.to_Map();
-			for (let key in types.types) {
-				const count_a = types.types[key];
-				if (!map.has(key)) {
-					if (inf && count_a === Infinity);
-					else
-						return false
-				};
-				const count_b = map.get(key);
-				if (inf && count_a === Infinity);
-				else if (count_a !== count_b) return false;
-				map.delete(key);
-			}
-			if (ext && map.size > 0) return false;
-			return true;
-		}
-
+		if (map.size > 0) return false;
+		return true;
 	}
 
 	make_Infinity() {
@@ -1099,38 +1050,9 @@ class Collection {
 	}
 }
 
-class ExpTypes {
-	static int = 'int';
-	static float = 'float';
-	static bool = 'bool';
-	static string = 'string';
-	static vec2 = 'vec2';
-	static vec3 = 'vec3';
-	static mat4 = 'mat4';
-	static euler = 'euler';
-	static any = '$any';
-	static number = '$number';
-	static base(type) {
-		return {
-			type: 'datatype',
-			datatype: 'base',
-			value: type
-		}
-	}
-	static array(type, count = null) {
-		return {
-			type: "datatype",
-			datatype: "arraytype",
-			count: count,
-			value: type
-		}
-	}
-}
-
 class SDML_Compile_Scope {
 	constructor(env, urlmap, template, inputs, outputs, slots, parent = null, opt) {
 		this.env = env;
-		this.uid = env.uid;
 		this.urlmap = urlmap;
 		this.nodemap = {};
 		this.template = template;
@@ -1138,26 +1060,21 @@ class SDML_Compile_Scope {
 		this.inputs = inputs ?? {};
 		this.outputs = outputs ?? {};
 		this.slots = slots ?? {};
-		for (const slot in this.slots) {
-			this.slots[slot].used = false;
-		}
 		this.parent = parent;
 		this.graph = new DepGraph();
-		this.order = [];
 		this.types = null;
 		this.collection = null;
 		this.inputs_type = this.get_InputsTypes();
 		this.nodes_type = {};
-		this.param_link = [];
 		this.compile();
 	}
 
-	new_Scope(template, additional_inputs = {}, keep_slots = false, parent = this) {
-		const scope = new SDML_Compile_Scope(this.env, this.urlmap, template, { ...this.inputs, ...additional_inputs }, this.outputs, keep_slots ? this.slots : {}, parent, this.opt);
+	new_Scope(template, parent = this) {
+		const scope = new SDML_Compile_Scope(this.env, this.urlmap, template, this.inputs, this.outputs, this.slots, parent, this.opt);
 		return scope;
 	}
 
-	registe_Node(id, node) {
+	register_Node(id, node) {
 		if (id === undefined) id = `$node_${this.env.uid}`;
 		if (id in this.nodemap) {
 			throw new SDML_Compile_Error(`dupicate id ${id} found`);
@@ -1196,23 +1113,14 @@ class SDML_Compile_Scope {
 		}
 	}
 
-	get_TargetExports(nodename) {
-		if (nodename in ALL_NODE_TYPES) {
-			return ALL_NODE_TYPES[nodename].exports;
-		}
-		if (nodename in this.urlmap) {
-			const node = this.env.get(this.urlmap[nodename]);
-			return node.get_ExportsTypes();
-		}
-	}
-
 	get_NodeInstance(id, tagName, parent = null, ast) {
 		if (tagName in ALL_NODE_TYPES) {
 			return new ALL_NODE_TYPES[tagName](this, tagName, id, parent, ast);
 		}
 		if (tagName in this.urlmap) {
 			const component = this.env.get(this.urlmap[tagName]);
-			return new SDML_ComponentNode(this, tagName, id, parent, ast, {}, component);
+			// console.log(component);
+			return new SDML_Compiler_Visitor(this, tagName, id, parent, ast);
 		}
 	}
 	/**
@@ -1229,7 +1137,7 @@ class SDML_Compile_Scope {
 			const { id = `$node_${this.env.uid}` } = n.attributes;
 			// check valid
 			if (!this.check_Valid(name)) {
-				throw new SDML_Compile_Error(`<${name}/> is not a valid nodes that can be found in base-nodes or ref-nodes or slots instance`);
+				throw new SDML_Compile_Error(`<${name}/> is not a valid nodes that can be found in base-nodes or ref-nodes`);
 			}
 			// get desire type and all entries
 			const target_inputs = this.get_TartgetInputs(name);
@@ -1243,14 +1151,14 @@ class SDML_Compile_Scope {
 				}
 				else {
 					const child = this.get_NodeInstance(id, name, parent, n);
-					this.registe_Node(id, child);
+					this.register_Node(id, child);
 					child.add_ToCollection(collection, param);
 					types.merge_TypesLocal(child.get_Type());
 				}
 			}
 			else if (target_inputs === Types.IGNORE) {
 				const child = this.get_NodeInstance(id, name, parent, n);
-				this.registe_Node(id, child);
+				this.register_Node(id, child);
 				child.add_ToCollection(collection, param);
 				types.merge_TypesLocal(child.get_Type());
 			}
@@ -1315,7 +1223,7 @@ class SDML_Compile_Scope {
 				}
 				// console.log(">>>>> match", match_params);
 				const child = this.get_NodeInstance(id, name, parent, n);
-				this.registe_Node(id, child);
+				this.register_Node(id, child);
 				child.receive_Sub(children_types, children_collection, match_params);
 				child.add_ToCollection(collection, param);
 				types.merge_TypesLocal(child.get_Type());
@@ -1326,7 +1234,7 @@ class SDML_Compile_Scope {
 				// }
 				// else {
 				// 	const child = this.get_NodeInstance(id, name, parent, n);
-				// 	this.registe_Node(id, child);
+				// 	this.register_Node(id, child);
 				// 	child.receive_Sub(sub_type, sub_collection, match_type);
 				// 	child.add_ToCollection(collection, param);
 				// 	types.merge_TypesLocal(child.get_Type());
@@ -1344,71 +1252,59 @@ class SDML_Compile_Scope {
 		return inputs;
 	}
 
-	registe_NodeRefs(node, nodeset) {
-		nodeset.forEach(id => {
-			this.graph.add_Edge(this.nodemap[id], node);
-			this.param_link.push(`Node_${this.nodemap[id].uid} --> |param| Node_${node.uid}`);
-		})
+	get_NodesTypes() {
+		const nodes = {};
+		for (const key in this.nodemap) {
+			const node = this.nodemap[key];
+			nodes[key] = node.get_Exports();
+		}
+		return nodes;
 	}
 
-	collect_Exports(ast) {
-		for (const node of ast) {
-			const vaild = this.check_Valid(node.tagName);
-			if (vaild) {
-				const { id } = node.attributes;
-				if (id !== undefined) this.nodes_type[id] = this.get_TargetExports(node.tagName) ?? {};
-			}
-			this.collect_Exports(node.children);
+	parse() {
+		for (const key in this.nodemap) {
+			const node = this.nodemap[key];
+			node.parse();
+			node.noderefs.forEach(id => {
+				this.graph.add_Edge(this.nodemap[id], node);
+			})
 		}
 	}
 
 	compile() {
-		this.collect_Exports(this.template);
+		// console.log("compile!!!");
 		const { types, collection } = this.walk(this.template);
 		this.types = types;
 		this.collection = collection;
-		for (const id in this.nodemap) {
-			const node = this.nodemap[id];
-			this.registe_NodeRefs(node, node.noderefs);
-		}
+		this.nodes_type = this.get_NodesTypes();
+		this.parse();
 		try {
-			this.order = this.graph.get_TopologicalOrder();
+			console.warn(types, collection, this.graph.get_TopologicalOrder());
+			// render_Graph(this.graph.to_Mermaid()).then(svg => {
+			// 	console.log(`Graph Preview:\n\t%c %c`, `border: black 1px solid; background: url("data:image/svg+xml;base64,${btoa(svg)}") no-repeat center; padding: 180px 180px; background-size: contain;`, "");
+			// })
 		}
 		catch (err) {
-			// render_Graph(err.graph).then(svg => {
-			// 	console.error(`${err.to_String()}\nGraph Preview:\n\t%c %c`, `border: black 1px solid; background: url("data:image/svg+xml;base64,${btoa(svg)}") no-repeat center; padding: 180px 180px; background-size: contain;`, "");
-			// })
-			throw new SDML_Compile_Error(`${err.msg}, the err graph is as followed:\n${err.map}`);
-			console.log(err);
+			render_Graph(err.graph).then(svg => {
+				console.log(`${err.to_String()}\nGraph Preview:\n\t%c %c`, `border: black 1px solid; background: url("data:image/svg+xml;base64,${btoa(svg)}") no-repeat center; padding: 180px 180px; background-size: contain;`, "");
+			})
+			// console.log(err.to_String());
 		}
 		return { types, collection };
+		// console.log(this.graph.to_Mermaid());
 	}
 
 	to_Mermaid() {
 		const [nodes, links] = this.$to_Mermaid();
-		return `graph LR\n${nodes}\n${[...links, ...this.param_link].join("\n")}`;
+		return `graph LR\n${nodes}\n${links.join("\n")}`;
 	}
 
 	$to_Mermaid(ans = [], link = []) {
-		const inputs = [];
-		for (const id in this.nodemap) {
-			const node = this.nodemap[id];
-			const deps = node.deps;
-			deps.forEach(input => link.push(`Input_${this.uid}_${input} --> |dep| Node_${node.uid}`));
-		}
-		for (const input in this.inputs) {
-			if (!this.parent || !(input in this.parent.inputs))
-				inputs.push(`Input_${this.uid}_${input}[(${input})]`)
-		}
-		for (const slot in this.slots) {
-			if (!this.parent || !(slot in this.parent.slots))
-				inputs.push(`Slot_${slot}>${slot}]`)
-		}
 		for (const key in this.nodemap) {
 			const node = this.nodemap[key];
 			node.to_Mermaid(ans, link);
 		}
-		return [`${[...inputs, ...ans].join('\n')}`, link];
+		return [`${ans.join('\n')}`, link];
 	}
 }
 
@@ -1422,7 +1318,7 @@ class SDML_Compile_Scope {
  * undefined means cannot be resolve earlier
  */
 class SDML_Compiler_Visitor {
-	constructor(scope, name, id, parent, ast, params) {
+	constructor(scope, name, id, parent, ast) {
 		this.scope = scope;
 		this.name = name;
 		this.id = id;
@@ -1430,14 +1326,10 @@ class SDML_Compiler_Visitor {
 		this.parent = parent;
 		this.deps = new Set();
 		this.noderefs = new Set();
-		this.params = {};
-		if (params !== undefined)
-			this.parse(params, ast);
 	}
 
 	static entries = [];
 	static inputs = {};
-	static exports = {};
 
 	compile() {
 		console.log(this);
@@ -1467,48 +1359,22 @@ class SDML_Compiler_Visitor {
 
 	}
 
+	parse() {
+		// console.log(">> parse", this)
+	}
+
 	get_Type() {
 		return SDML_Compiler_Visitor.type;
 	}
 
-	parse(params, ast) {
-		const err = [];
-		for (const param in params) {
-			const { datatype, default: defaultval, hook } = params[param];
-			let exp_str = ast.attributes[param];
-			// required
-			if (defaultval === undefined) {
-				if (exp_str === undefined) {
-					err.push(`required parameter '${param}' missing in node <${this.name}/>\nyou should use <${this.name} ${param}="parameter"/> and the parameter should be type of ${typeToString(datatype)}`);
-					continue;
-				}
+	get_Exports() {
+		return {
+			test: {
+				type: 'datatype',
+				datatype: 'base',
+				value: 'vec2'
 			}
-			else {
-				if (exp_str === undefined) exp_str = defaultval;
-			}
-			const [exp_code, exp_opt, exp_err] = parse_Expression(exp_str, `${this.id}_param_${param}`, this.scope.inputs_type, this.scope.nodes_type);
-			if (exp_code === null) {
-				err.push(`compiling parameter '${param}' failed in <${this.name} test="${exp_str}"/>, here are the error messages from the expression compile sub-module:\n${exp_err.join("\n\n")}`);
-				continue;
-			}
-			else if (!typeCheck(datatype, exp_opt.datatype)) {
-				err.push(`type-checking parameter '${param}' failed in <${this.name} test="${exp_str}"/>, here are the current types:\nrequired: ${typeToString(datatype)}\nbut has: ${typeToString(exp_opt.datatype)}`);
-				continue;
-			}
-			else {
-				if (hook) hook(this, exp_str, exp_code, exp_opt);
-				this.params[param] = {
-					str: exp_str,
-					code: exp_code,
-					opt: exp_opt,
-				}
-				this.add_Deps(exp_opt.deps);
-				this.add_NodeRefs(exp_opt.ids);
-			}
-		}
-		if (err.length > 0) {
-			throw new SDML_Compile_Error(`when parsing node <${this.name}/> one or many expression errors occured as following:\n${err.map((i, idx) => `${idx + 1}. ${i}`).join('\n')}`);
-		}
+		};
 	}
 
 	add_Deps(set) {
@@ -1517,16 +1383,6 @@ class SDML_Compiler_Visitor {
 
 	add_NodeRefs(set) {
 		set.forEach(i => this.noderefs.add(i));
-	}
-
-	// codegen
-	get_NewNode(codegen) {
-		return 'ComponentBase';
-	}
-
-
-	get_NodeChildren(codegen) {
-		return '{}';
 	}
 
 	static get type() {
@@ -1543,10 +1399,13 @@ class SDML_GeoTest extends SDML_Compiler_Visitor {
 
 	static entries = ['from', 'to'];
 	static inputs = {
-		fromto: {
-			default: new Types(),
-			from: new Types({ vec2: 1 }),
-			to: new Types({ vec2: 1 }),
+		none: {
+			default: new Types(null)
+		},
+		main: {
+			default: new Types({
+				vec2: Infinity
+			})
 		},
 		both: {
 			default: new Types({
@@ -1554,18 +1413,12 @@ class SDML_GeoTest extends SDML_Compiler_Visitor {
 				geometry: Infinity,
 			})
 		},
-		main: {
-			default: new Types({
-				vec2: Infinity
-			})
-		},
-		none: {
-			default: new Types(null)
-		},
+		fromto: {
+			default: new Types(),
+			from: new Types({ vec2: 1 }),
+			to: new Types({ vec2: 1 }),
+		}
 	};
-	static exports = {
-		size: ExpTypes.base(ExpTypes.float),
-	}
 
 	to_Mermaid(ans, link) {
 		ans.push(`Node_${this.uid}(geo id=${this.id} match=${this.matched})`);
@@ -1592,6 +1445,7 @@ class SDML_GeoTest extends SDML_Compiler_Visitor {
 	}
 
 	receive_Sub(types, collection, match_type) {
+		console.log(types, collection, match_type)
 		this.matched = match_type;
 		switch (match_type) {
 			case 'none': { break; }
@@ -1671,18 +1525,9 @@ class SDML_Print extends SDML_Compiler_Visitor {
 	}
 }
 
-class SDML_Vec2 extends SDML_Compiler_Visitor {
+class SDML_GeoTest2 extends SDML_Compiler_Visitor {
 	constructor(scope, name, id, parent, ast) {
-		super(scope, name, id, parent, ast, {
-			x: {
-				datatype: ExpTypes.base(ExpTypes.number),
-				default: '0'
-			},
-			y: {
-				datatype: ExpTypes.base(ExpTypes.number),
-				default: '0'
-			}
-		});
+		super(scope, name, id, parent, ast);
 	}
 
 	static inputs = Types.NONE;
@@ -1696,7 +1541,7 @@ class SDML_Vec2 extends SDML_Compiler_Visitor {
 	}
 
 	get_Type() {
-		return SDML_Vec2.type;
+		return SDML_GeoTest2.type;
 	}
 
 	static get type() {
@@ -1729,72 +1574,9 @@ class SDML_Both extends SDML_Compiler_Visitor {
 	}
 }
 
-class SDML_ExportTest extends SDML_Compiler_Visitor {
-	constructor(scope, name, id, parent, ast) {
-		super(scope, name, id, parent, ast);
-	}
-
-	static inputs = {
-		none: {
-			default: new Types(null)
-		},
-		vec2: {
-			default: new Types({
-				vec2: Infinity
-			})
-		}
-	};
-	static exports = {
-		bool: ExpTypes.base(ExpTypes.bool),
-		bool_arr: ExpTypes.array(ExpTypes.base(ExpTypes.bool))
-	}
-
-	to_Mermaid(ans, link) {
-		ans.push(`Node_${this.uid}(export-test id=${this.id})`);
-		if (this.subs) {
-			for (const sub of this.subs) {
-				link.push(`Node_${sub.uid} -->|vec2| Node_${this.uid}`);
-			}
-		}
-	}
-
-	receive_Sub(types, collection, match_type) {
-		// console.log(types, collection, match_type)
-		this.matched = match_type;
-		switch (match_type) {
-			case 'none': { break; }
-			case 'vec2': {
-				const defaults = collection.get_All('default');
-				this.subs = defaults;
-				for (const node of defaults) {
-					this.scope.graph.add_Edge(node, this);
-				}
-				break;
-			}
-		}
-	}
-
-	add_ToCollection(collection, param) {
-		// console.log(">>>>>>", collection, param)
-		// collection.add(param, 'vec2', this);
-	}
-
-	get_Type() {
-		return SDML_ExportTest.type;
-	}
-
-	static get type() {
-		return new Types();
-	}
-}
-
 class SDML_If extends SDML_Compiler_Visitor {
 	constructor(scope, name, id, parent, ast) {
-		super(scope, name, id, parent, ast, {
-			test: {
-				datatype: ExpTypes.base(ExpTypes.bool)
-			}
-		});
+		super(scope, name, id, parent, ast);
 		this.test_ast = ast.attributes.test;
 		let true_branch = [];
 		let false_branch = [];
@@ -1802,8 +1584,8 @@ class SDML_If extends SDML_Compiler_Visitor {
 			if (c.tagName === 'else') false_branch = c.children;
 			else true_branch.push(c);
 		})
-		this.true_scope = true_branch.length === 0 ? null : this.scope.new_Scope(true_branch, {}, true);
-		this.false_scope = false_branch.length === 0 ? null : this.scope.new_Scope(false_branch, {}, true);
+		this.true_scope = true_branch.length === 0 ? null : this.scope.new_Scope(true_branch);
+		this.false_scope = false_branch.length === 0 ? null : this.scope.new_Scope(false_branch);
 		if (this.false_scope === null) {
 			if (this.true_scope === null) {
 				throw new SDML_Compile_Error(`in node <if id="${this.id}"/> it does not has any sub nodes, you should always provide either default or <else param> sub nodes`);
@@ -1832,6 +1614,7 @@ class SDML_If extends SDML_Compiler_Visitor {
 			// 	throw new SDML_Compile_Error(`in node <if id="${this.id}"/> the types of the true branch is not the same as the false branch:\nthe true branch types is:\n${true_types.to_List().map(i => `\t${i}`).join('\n')}\nthe false branch types is:\n${false_types.to_List().map(i => `\t${i}`).join('\n')}`);
 			// }
 		}
+		// console.log(this.types);
 	}
 
 	static entries = [];
@@ -1863,6 +1646,26 @@ class SDML_If extends SDML_Compiler_Visitor {
 		})
 	}
 
+	parse() {
+		if (this.test_ast === undefined) {
+			throw new SDML_Compile_Error(`required parameter 'test' missing in node <if/>\nyou should use <if test="parameter"/> and the parameter should be type of bool`);
+		}
+		const [test_code, test_opt, test_err] = parse_Expression(this.test_ast, `${this.id}_param_test`, this.scope.inputs_type, this.scope.nodes_type);
+		if (test_code === null) {
+			throw new SDML_Compile_Error(`compiling parameter 'test' failed in <if test="${this.test_ast}"/>, here are the error messages from the expression compile sub-module:\n${test_err.join("\n\n")}`);
+		}
+		this.test_res = {
+			code: test_code,
+			opt: test_opt,
+		}
+		if (test_opt.constant) {
+			throw new SDML_Compile_Warning(`compiling parameter 'test' warning in <if test="${this.test_ast}"/>\nexpression '${this.test_ast}' is an constant expression\nyou may want to replace the <if/> node with static ones`);
+		}
+		this.add_Deps(test_opt.deps);
+		this.add_NodeRefs(test_opt.ids);
+		// console.log(this);
+	}
+
 	get_Type() {
 		return this.types.clone();
 	}
@@ -1874,381 +1677,29 @@ class SDML_If extends SDML_Compiler_Visitor {
 
 class SDML_For extends SDML_Compiler_Visitor {
 	constructor(scope, name, id, parent, ast) {
-		super(scope, name, id, parent, ast, {
-			array: {
-				datatype: ExpTypes.array(ExpTypes.base(ExpTypes.any))
-			}
-		});
-		if (ast.children.length === 0) {
-			throw new SDML_Compile_Error(`in node <for id="${this.id}"/> it does not has any sub nodes, you should always provide sub nodes as the loop body`);
-		}
-		this.iter = ast.attributes.iter;
-		if (this.iter === undefined) {
-			throw new SDML_Compile_Error(`in node <for id="${this.id}"/> it requires a 'iter' parameter like: <for array="..." iter="parameter"/> where parameter is a valid identifier name`);
-		}
-		if (!test_IdentifierName(this.iter)) {
-			throw new SDML_Compile_Error(`in node <for id="${this.id}" iter="${this.iter}"/> is invalid identifier name`);
-		}
-		this.for_loop = this.scope.new_Scope(ast.children, { [this.iter]: { uid: this.scope.env.uid, default: '', datatype: this.params.array.opt.datatype.value } });
-		this.types = this.for_loop.types.clone().make_Infinity();
+		super(scope, name, id, parent, ast);
+		this.for_loop = this.scope.new_Scope(ast.children);
+		this.types = null;
 	}
 
 	static entries = [];
 	static inputs = Types.IGNORE;
 
-	to_Mermaid(ans, link) {
-		let str = `subgraph Scope_${this.uid}`;
-		str += `\nNode_${this.uid}(for id=${this.id})`;
-		if (this.for_loop) {
-			const [nodes, links] = this.for_loop.$to_Mermaid([], link);
-			str += `\n${nodes}`;
-			for (const node of this.for_loop.collection.get_All('default')) {
-				links.push(`Node_${node.uid} --> Node_${this.uid}`);
-			}
-		}
-		ans.push(`${str}\nend`);
-	}
-
 	receive_Sub(types, collection, match_type) {
 	}
 
 	add_ToCollection(collection, param) {
-		this.types.type_names.forEach(type => {
-			collection.add(param, type, this)
-		})
+		collection.add(param, 'geometry', this);
+		// this.types.type_names.forEach(type => {
+		// })
 	}
 
 	get_Type() {
-		return this.types;
+		return new Types();
 	}
 
 	static get type() {
 		return Types.NONE;
-	}
-}
-
-class SDML_Slot extends SDML_Compiler_Visitor {
-	constructor(scope, name, id, parent, ast) {
-		super(scope, name, id, parent, ast);
-		this.slotname = ast.attributes.name;
-		if (this.slotname === undefined) {
-			throw new SDML_Compile_Error(`in node <for id="${this.id}"/> it requires a 'iter' parameter like: <for array="..." iter="parameter"/> where parameter is a valid identifier name`);
-		}
-		if (!(this.slotname in this.scope.slots)) {
-			throw new SDML_Compile_Error(`in node <slot name="${this.slotname}"/> is not defined in the current scope`);
-		}
-		if (this.scope.slots[this.slotname].used) {
-			throw new SDML_Compile_Error(`in node <slot name="${this.slotname}"/> is already referenced once`);
-		}
-		this.scope.slots[this.slotname].used = true;
-		this.types = this.scope.slots[this.slotname].types.clone();
-	}
-
-	static entries = [];
-	static inputs = Types.NONE;
-
-	to_Mermaid(ans, link) {
-		ans.push(`Node_${this.uid}(slot name=${this.slotname})`);
-		link.push(`Slot_${this.slotname} --> Node_${this.uid}`);
-	}
-
-	receive_Sub(types, collection, match_type) {
-	}
-
-	add_ToCollection(collection, param) {
-		this.types.type_names.forEach(type => {
-			collection.add(param, type, this)
-		})
-	}
-
-	get_Type() {
-		return this.types;
-	}
-
-	static get type() {
-		return Types.NONE;
-	}
-}
-
-class SDML_ComponentNode extends SDML_Compiler_Visitor {
-	constructor(scope, name, id, parent, ast, params, component) {
-		super(scope, name, id, parent, ast);
-		this.component = component;
-		this.collection = null;
-		this.types = component.types.clone();
-	}
-
-	static entries = [];
-	static inputs = Types.NONE;
-
-	to_Mermaid(ans, link) {
-		ans.push(`Node_${this.uid}(component url=${this.component.url})`);
-		for (const slotname in this.collection.collection) {
-			const nodes = this.collection.get_All(slotname);
-			for (const node of nodes) {
-				link.push(`Node_${node.uid} --> Node_${this.uid}`);
-			}
-		}
-	}
-
-	receive_Sub(types, collection, match_type) {
-		this.collection = collection;
-		for (const slotname in collection.collection) {
-			const nodes = collection.get_All(slotname);
-			for (const node of nodes) {
-				this.scope.graph.add_Edge(node, this);
-			}
-		}
-	}
-
-	add_ToCollection(collection, param) {
-		this.types.type_names.forEach(type => {
-			collection.add(param, type, this)
-		})
-	}
-
-	get_Type() {
-		return this.types;
-	}
-
-	static get type() {
-		return Types.NONE;
-	}
-}
-
-class SDML_Add extends SDML_Compiler_Visitor {
-	constructor(scope, name, id, parent, ast) {
-		super(scope, name, id, parent, ast);
-		this.matched = null;
-		this.subs = [];
-	}
-
-	static entries = [];
-	static inputs = {
-		default: {
-			default: new Types({
-				float: Infinity
-			})
-		},
-	};
-	static exports = {
-		result: ExpTypes.base(ExpTypes.float),
-	}
-
-	to_Mermaid(ans, link) {
-		ans.push(`Node_${this.uid}(add id=${this.id} match=${this.matched})`);
-		if (this.matched === 'default')
-			for (const sub of this.subs) {
-				link.push(`Node_${sub.uid} -->|float| Node_${this.uid}`);
-			}
-	}
-
-	receive_Sub(types, collection, match_type) {
-		this.matched = match_type;
-		switch (match_type) {
-			case 'default': {
-				const defaults = collection.get_All('default');
-				this.subs = defaults;
-				for (const node of defaults) {
-					this.scope.graph.add_Edge(node, this);
-				}
-				break;
-			}
-		}
-	}
-
-	add_ToCollection(collection, param) {
-		collection.add(param, 'float', this);
-	}
-
-	get_NewNode(codegen) {
-		return codegen.get_Template('TAG_Add_0');
-	}
-
-	get_NodeChildren(codegen) {
-		switch (this.matched) {
-			case 'default': {
-				const arr = this.subs.map(n => {
-					const subname = codegen.get_NodeCache(n);
-					return `...this.${subname}.r.n.float`;
-				});
-				return `{default: {float: [${arr.join(', ')}]}}`;
-			}
-		}
-	}
-
-	get_Type() {
-		return SDML_Add.type;
-	}
-
-	static get type() {
-		return new Types({ float: 1 });
-	}
-}
-
-class SDML_Number extends SDML_Compiler_Visitor {
-	constructor(scope, name, id, parent, ast) {
-		super(scope, name, id, parent, ast, {
-			n: {
-				datatype: ExpTypes.base(ExpTypes.number),
-				default: '0'
-			},
-		});
-	}
-
-	static inputs = Types.NONE;
-
-	to_Mermaid(ans) {
-		ans.push(`Node_${this.uid}(number id=${this.id})`);
-	}
-
-	add_ToCollection(collection, param) {
-		collection.add(param, 'float', this);
-	}
-
-	get_Type() {
-		return SDML_Number.type;
-	}
-
-	get_NewNode(codegen) {
-		return codegen.get_Template('TAG_Number_0');
-	}
-
-	get_NodeChildren(codegen) {
-		return '{}';
-	}
-
-	static get type() {
-		return new Types({ float: 1 });
-	}
-}
-
-class SDML_Compile_CodeGen {
-	constructor(env, class_name, scope, opt) {
-		this.opt = { ...opt };
-		this.env = env;
-		this.class_name = class_name;
-		this.scope = scope;
-		this.nodes = new Map();
-		this.params = new Map();
-	}
-
-	get_NodeCache(node) {
-		return this.nodes.get(node);
-	}
-
-	get_NodeParamCache(node, param) {
-		return this.params.get(node)?.[param];
-	}
-
-	get_Template(template) {
-		const { name, code } = SDML_Templates[template] ?? {};
-		if (name !== undefined) {
-			this.env.add_Template(name, code);
-		}
-		return name;
-	}
-
-	get_DefaultInputs() {
-		const arr = [];
-		const map = this.scope.inputs;
-		for (const param in map) {
-			arr.push(`${param}: ${map[param].default}`);
-		}
-		return `{${arr.join(', ')}}`;
-	}
-
-	get_NodesDeclaration() {
-		const ans = [];
-		this.nodes.forEach((val, key) => {
-			ans.push(`this.${val} = null;`)
-		})
-		return ans;
-	}
-
-	get_ParamsDeclaration() {
-		const ans = [];
-		this.params.forEach((val, key) => {
-			for (const param in val)
-				ans.push(`this.${val[param]} = null;`)
-		})
-		return ans;
-	}
-
-	get_ParamsInit() {
-		const ans = [];
-		this.params.forEach((val, key) => {
-			for (const param in val)
-				ans.push(`this.${val[param]} = ${key.params[param].code};`)
-		})
-		return ans;
-	}
-
-	get_Result() {
-		const collection = this.scope.collection.get('default');
-		const arr = [];
-		for (const type in collection) {
-			const nodes_arr = [];
-			for (const node of collection[type]) {
-				const node_name = this.get_NodeCache(node);
-				nodes_arr.push(`...this.${node_name}.r.n.${type}`);
-			}
-			arr.push(`${type}: [${nodes_arr.join(', ')}]`)
-		}
-		return `{n:{${arr.join('\n')}}, e:{}}`
-	}
-
-	get_NodeInputs(node) {
-		const arr = [];
-		const map = this.params.get(node);
-		for (const param in map) {
-			arr.push(`${param}: this.${map[param]}`);
-		}
-		return `{${arr.join(', ')}}`;
-	}
-
-	get_NodeChildren(node) {
-		return node.get_NodeChildren(this);
-	}
-
-	get_NodesInit() {
-		const ans = [];
-		for (const node of this.scope.order) {
-			const obj_name = node.get_NewNode(this);
-			ans.push(`this.${this.get_NodeCache(node)} = new ${obj_name}(${this.get_NodeInputs(node)}, ${this.get_NodeChildren(node)}, {});`)
-		}
-		return ans;
-	}
-
-	generate() {
-		for (const node of this.scope.order) {
-			this.nodes.set(node, `node_${node.uid}`);
-			const map = {};
-			this.params.set(node, map);
-			for (const param in node.params) {
-				map[param] = `node_${node.uid}_param_${param}`;
-			}
-			// console.log(this.get_NodeInputs(node));
-		}
-		return `class ${this.class_name} extends ComponentBase {
-	constructor(i, c, s) {
-        super(i ?? ${this.get_DefaultInputs()});
-        this.result = null;
-${this.get_NodesDeclaration().map(s => `\t\t${s}`).join('\n')}
-${this.get_ParamsDeclaration().map(s => `\t\t${s}`).join('\n')}
-        this.init(c, s);
-    }
-	init(c, s) {
-${this.get_ParamsInit().map(s => `\t\t${s}`).join('\n')}
-${this.get_NodesInit().map(s => `\t\t${s}`).join('\n')}
-		this.r = ${this.get_Result()};
-	}
-	update(i, c, s) {
-	}
-	dispose() {
-
-	}
-}`
 	}
 }
 
@@ -2256,67 +1707,7 @@ const ALL_NODE_TYPES = {
 	'if': SDML_If,
 	'for': SDML_For,
 	'geo': SDML_GeoTest,
-	'vec2': SDML_Vec2,
+	'vec2': SDML_GeoTest2,
 	'print': SDML_Print,
 	'both': SDML_Both,
-	'export-test': SDML_ExportTest,
-	'slot': SDML_Slot,
-	'add': SDML_Add,
-	'num': SDML_Number
 }
-
-// const a = new Types({ a: 1 });
-// const b = new Types({ b: Infinity, a: Infinity });
-// console.log(a.match_Types(b, true))
-// const a1 = new Types({ a: 1 });
-// const b1 = new Types({ b: 1, a: 1 });
-// console.log(a1.match_Types(b1, true))
-// const a2 = new Types({ a: 1 });
-// const b2 = new Types({ a: Infinity });
-// console.log(a2.match_Types(b2, true))
-// const a3 = new Types();
-// const b3 = new Types({ a: Infinity });
-// console.log(a3.match_Types(b3, true))
-// const a4 = new Types({ b: 1 });
-// const b4 = new Types({ a: Infinity });
-// console.log(a4.match_Types(b4, true))
-
-class BitMask {
-	constructor(inputs = []) {
-		this.inputs = inputs;
-		this.count = inputs.length;
-		this.int_count = Math.ceil(this.count / 31);
-	}
-
-	static add_Mask(i, pos) {
-		return i | (1 << pos);
-	}
-
-	get_Index(input) {
-		return this.inputs.indexOf(input);
-	}
-
-	get_Masks(inputs) {
-		const ans = {};
-		for (const input of inputs) {
-			const idx = this.get_Index(input);
-			if (idx === -1) continue;
-			const pos = idx % 31;
-			const cnt = Math.floor(idx / 31);
-			if (cnt in ans) {
-				ans[cnt] = BitMask.add_Mask(ans[cnt], pos);
-			}
-			else {
-				ans[cnt] = BitMask.add_Mask(0, pos);
-			}
-		}
-		return Object.entries(ans).map(([cnt, pos]) => [parseInt(cnt), pos]);
-	}
-
-	to_String() {
-
-	}
-}
-
-// const a = new BitMask(['a', 'b', 'c', 'a1', 'b1', 'c1', 'a2', 'b2', 'c2', 'a3', 'b3', 'c3', 'a4', 'b4', 'c4', 'a5', 'b5', 'c5', 'a6', 'b6', 'c6', 'a7', 'b7', 'c7', 'a8', 'b8', 'c8', 'a9', 'b9', 'c9', 'a10', 'b10', 'c10', 'a11', 'b11', 'c11', 'a12', 'b12', 'c12']);
-// console.log(a.get_Masks(['a', 'c12']));

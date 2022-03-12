@@ -288,10 +288,7 @@ export const SunDesignExpressionParser = new Language("sundesignexp", {
 	},
 	'func': () => {
 		return new Match([
-			new ChooseOne([
-				new MatchToken("TK_IDENTIFIER", undefined, (match, token) => { return ['value', { type: 'identifier', value: token.value }] }),
-				new MatchToken("TK_ID", undefined, (match, token) => { return ['value', { type: 'id', value: token.value }] }),
-			]),
+			new MatchToken("TK_IDENTIFIER", undefined, (match, token) => { return ['value', { type: 'identifier', value: token.value }] }),
 			new Once_or_None([
 				new ChooseOne([
 					new Match([
@@ -351,6 +348,17 @@ export const SunDesignExpressionParser = new Language("sundesignexp", {
 				match.nodes[1][1].$start = match.nodes[0][1].$start
 				match.nodes[1][1].$startidx = match.nodes[0][1].$startidx
 				return match.nodes[1]
+			}),
+			new Match([
+				new MatchToken("TK_ID", undefined, (match, token) => { return ['value', { type: 'id', value: token.value }] }),
+				new MatchToken("TK_DOT", undefined),
+				new MatchToken("TK_IDENTIFIER", undefined, (match, token) => { return ['value', { type: 'property', value: token.value }] }),
+			], (match, token) => {
+				return ['noderef', {
+					type: 'noderef',
+					id: match.nodes[0][1],
+					identifier: match.nodes[1][1],
+				}]
 			})
 		])
 	},
@@ -418,7 +426,6 @@ export const SunDesignExpressionParser = new Language("sundesignexp", {
 			tree.forEach((op) => {
 				let value = op[1][0][1];
 				let rsqr = op[1][1][1];
-				console.log(rsqr)
 				node = { type: 'binop', value: "[]", sub: [sub, value], $start: sub.$start, $startidx: sub.$startidx, $end: rsqr.$end, $endidx: rsqr.$endidx };
 				sub = node;
 			})
@@ -1819,7 +1826,7 @@ export const SunDesignExpressionConstants = {
 	}
 }
 
-export const SunDesignExpressionVisitor = function (prelude = SunDesignExpressionPrelude, inputs) {
+export const SunDesignExpressionVisitor = function (prelude = SunDesignExpressionPrelude, inputs, nodes) {
 	const FUNCS = prelude.FUNCS ?? {}
 	const STRUCTS = prelude.STRUCTS ?? {}
 	const INPUTS = inputs ?? {
@@ -1836,6 +1843,20 @@ export const SunDesignExpressionVisitor = function (prelude = SunDesignExpressio
 				type: "datatype",
 				datatype: 'base',
 				value: 'int'
+			}
+		}
+	}
+	const NODES = nodes ?? {
+		param: {
+			bool_arr: {
+				"type": "datatype",
+				"datatype": "arraytype",
+				"count": null,
+				"value": {
+					"type": "datatype",
+					"datatype": "base",
+					"value": "bool"
+				}
 			}
 		}
 	}
@@ -1875,6 +1896,16 @@ export const SunDesignExpressionVisitor = function (prelude = SunDesignExpressio
 	function match_Inputs(iden) {
 		if (INPUTS[iden] === undefined) return null
 		return cloneType(INPUTS[iden])
+	}
+	function has_Node(iden) {
+		return iden in NODES
+	}
+	function match_Node(id, iden) {
+		const node = NODES[id];
+		if (iden in node) {
+			return [true, node[iden]]
+		}
+		else return [false, null]
 	}
 	return {
 		binop: {
@@ -2044,6 +2075,46 @@ export const SunDesignExpressionVisitor = function (prelude = SunDesignExpressio
 				return path.node
 			}
 		},
+		noderef: {
+			walk(node, path) {
+				// check exists
+			},
+			transform(path) {
+				const node = path.node
+				const id = node.id.value
+				const iden = node.identifier.value
+				const ans = has_Node(id)
+				if (ans) {
+					const [ans, datatype] = match_Node(id, iden)
+					if (!ans) {
+						node.constant = false
+						node.datatype = {
+							type: "datatype",
+							datatype: "base",
+							value: "$unknown"
+						}
+						let [left_str, left_starter, left_end] = path.$sourcescript.get_ScriptPortion(node.identifier.$start, node.identifier.$end, "~")
+						return [node, new BaseError("ExportProperty Not Found", `\n${left_str}\nexport property '${id}' cannot be found in node #${id}`, node.$start, node.$end)]
+					}
+					node.datatype = datatype
+					node.constant = false
+					node.id = id
+					node.identifier = iden
+					node.func = 'getExportProperty'
+					return path.node
+				}
+				else {
+					node.constant = false
+					node.datatype = {
+						type: "datatype",
+						datatype: "base",
+						value: "$unknown"
+					}
+					let [left_str, left_starter, left_end] = path.$sourcescript.get_ScriptPortion(node.id.$start, node.id.$end, "~")
+					return [node, new BaseError("Node Not Found", `\n${left_str}\nnode with id '${id}' cannot be found in the current scope`, node.$start, node.$end)]
+				}
+			}
+		},
 		array: {
 			walk(node, path) {
 				return ["list"]
@@ -2051,12 +2122,7 @@ export const SunDesignExpressionVisitor = function (prelude = SunDesignExpressio
 			transform(path) {
 				const node = path.node
 				const datatypes = node.list.map(i => i.datatype)
-				const constant = node.list.reduce((last, i) => {
-					if (i.constant === true) return last
-					return false
-				}, true)
-				if (constant)
-					node.constant = true
+
 				if (datatypes.length === 0) {
 					node.datatype = {
 						type: "datatype",
@@ -2109,11 +2175,11 @@ class TypeCheckPass {
 		this.walker = new Walker(null, null, null, null, true)
 	}
 
-	walk(source, ast, inputs) {
+	walk(source, ast, inputs, nodes) {
 		this.walker.error = []
 		this.walker.ast = ast
 		this.walker.sourcescript = source
-		this.walker.visitors = SunDesignExpressionVisitor(SunDesignExpressionPrelude, inputs)
+		this.walker.visitors = SunDesignExpressionVisitor(SunDesignExpressionPrelude, inputs, nodes)
 		return this.walker.walk(ast)
 	}
 }
@@ -2337,7 +2403,7 @@ const SunDesignExpressionOptimizations = {
 				const i = idx.value
 				if (i < 0 || i >= arr.datatype.count) throw new BaseError("Array Access Error", `${idx.value} is out of bound, should be in [0, ${arr.datatype.count})`, idx.$start, idx.$end)
 			}
-			if (const1, const2) {
+			if (const1 && const2) {
 				return arr.list[idx.value]
 			}
 		},
@@ -2405,7 +2471,7 @@ export const SunDesignOptimizationPassVisitor = {
 				const node = path.node
 				const [left, property] = node.sub
 				const func = node.func
-				if (SunDesignExpressionOptimizations.STRUCTS[func] !== undefined) {
+				if (left.type === 'value' && SunDesignExpressionOptimizations.STRUCTS[func] !== undefined) {
 					let ans = SunDesignExpressionOptimizations.STRUCTS[func](left.constant, left)
 					if (ans === undefined) return node
 					ans.datatype = ans.datatype ?? node.datatype
@@ -2423,6 +2489,7 @@ export const SunDesignOptimizationPassVisitor = {
 				}
 			}
 			catch (err) {
+				console.log(err)
 				err.set_Portion(path.$start, path.$end)
 				return [path.node, err]
 			}
@@ -2545,6 +2612,7 @@ export const SunDesignOptimizationPassVisitor = {
 				return node
 			}
 			catch (err) {
+				console.log(err);
 				err.set_Portion(path.$start, path.$end)
 				return [path.node, err]
 			}
@@ -2552,7 +2620,16 @@ export const SunDesignOptimizationPassVisitor = {
 	},
 	array: {
 		walk() { return ["list"] },
-		transform(path) { }
+		transform(path) {
+			const node = path.node
+			const constant = node.list.reduce((last, i) => {
+				if (i.constant === true) return last
+				return false
+			}, true)
+			if (constant)
+				node.constant = true
+			return node
+		}
 	}
 }
 
@@ -2722,6 +2799,11 @@ class CodeGenPass {
 		return this[ast.type](ast, opt);
 	}
 
+	array(ast, opt) {
+		const list = ast.list.map(i => this.walk(i, opt));
+		return `[${list.join(', ')}]`;
+	}
+
 	vec2(val, opt) {
 		const x = this.walk(val.x, opt);
 		const y = this.walk(val.y, opt);
@@ -2735,11 +2817,20 @@ class CodeGenPass {
 			return this[ast.datatype.value](ast.value, opt);
 	}
 
+	noderef(ast, opt) {
+		opt.ids.add(ast.id)
+		return `${ast.func}('${ast.id}', '${ast.identifier}')`;
+	}
+
 	func(ast, opt) {
 		if (SunDesignCodeGenPassVisitor[ast.func])
 			return SunDesignCodeGenPassVisitor[ast.func](ast.arguments.map(a => this.walk(a, opt)));
 		else
 			return `${ast.func}(${ast.arguments.map(a => this.walk(a, opt)).join(', ')})`;
+	}
+
+	dot(ast, opt) {
+		return `${ast.func}(${this.walk(ast.sub[0], opt)})`;
 	}
 
 	binop(ast, opt) {
@@ -2748,12 +2839,17 @@ class CodeGenPass {
 		return SunDesignCodeGenPassVisitor[ast.value](a, b);
 	}
 
+	property(ast) {
+		return ast.value;
+	}
+
 	identifier(ast, opt) {
 		opt.deps.add(ast.value);
 		return opt.INPUTS ? `${opt.INPUTS}.${ast.value}` : ast.value;
 	}
 
-	generate(ast, opt = { constant: false, deps: new Set(), ids: new Set(), datatype: { type: 'datatype', datatype: 'base', value: 'unknown' }, THREE: 'ENV.THREE', FUNCS: 'ENV.FUNCS', INPUTS: 'INPUTS' }) {
+	generate(ast, opt = {}) {
+		opt = { constant: false, deps: new Set(), ids: new Set(), datatype: { type: 'datatype', datatype: 'base', value: 'unknown' }, THREE: 'ENV.THREE', FUNCS: 'ENV.FUNCS', INPUTS: 'INPUTS', ...opt };
 		opt.constant = ast.constant ? true : false;
 		opt.datatype = ast.datatype ?? opt.datatype;
 		return [this.walk(ast, opt), opt];

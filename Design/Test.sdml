@@ -1,16 +1,19 @@
 <refs>
-	<component id="top" url="./Design/Top.sdml"/>
 </refs>
 <inputs>
-	<float name="input0" default="(vec2(1+2).length)"/>
+	<float name="input0" default="1.0"/>
 </inputs>
 <outputs>
 	<vec2 name="input0"/>
 </outputs>
 <template>
-	<box />
-	<box />
-	<box />
-	<box />
-	<top />
+	<add>
+		<add>
+			<num n="input0"/>
+			<num n="input0 + 1"/>
+			<num n="input0 + 2"/>
+			<num n="input0 + 3"/>
+		</add>
+		<num n="100"/>
+	</add>
 </template>

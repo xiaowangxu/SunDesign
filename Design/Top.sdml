@@ -2,17 +2,34 @@
 </refs>
 <inputs>
 	<vec2 name="input0" default="vec2(1,2)"/>
+	<bool name="test_param" default="true"/>
 </inputs>
+<slots>
+	<slot1>
+		<vec2/>
+		<geometry/>
+	</slot1>
+	<slot2>
+		<vec2 count="1"/>
+	</slot2>
+</slots>
 <type>
-	<geo/>
+	<vec2/>
+	<geometry/>
 </type>
 <template>
-	<box>
-		<if>
-			<circle name="input0" default="10"/>
-		</if>
-		<box>
-			<circle/>
-		</box>
-	</box>
+	<export-test id="param">
+	</export-test>
+	<if test="#param.bool">
+		<vec2/>
+		<geo id="test">
+			<vec2/>
+			<slot name="slot1"/>
+		</geo>
+		<geo>
+			<for array="[vec2(0), vec2(1)]" iter="point">
+				<vec2 x="vec2(point.x + 1123).x"/>
+			</for>
+		</geo>
+	</if>
 </template>

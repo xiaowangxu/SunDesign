@@ -7,12 +7,18 @@
 	<title>SunDesign</title>
 	<!-- <script src="./lib/mermaid.js"></script> -->
 </head>
+<style>
+	body {
+		color: #f8dedb;
+	}
+</style>
 
 <body>
 
 </body>
 <script type="module">
 	import { Environment as env } from "./SunDesign.js";
+	import * as rt from "./SunDesignRuntime.js";
 
 	const ENV = new env();
 	console.log(ENV);
@@ -22,8 +28,8 @@
 	Promise.all(ENV.promises).finally(() => {
 		console.timeEnd("compiling");
 	}).then(() => {
-		for (let i in ENV.caches)
-			console.log(ENV.caches[i].summary());
+		// for (let i in ENV.caches)
+		// console.log(ENV.caches[i].summary());
 		// console.warn(ENV.caches)
 	})
 
