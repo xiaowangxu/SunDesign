@@ -1,0 +1,18 @@
+<refs>
+</refs>
+<inputs>
+</inputs>
+<slots>
+	<nums>
+		<float count="2"/>
+	</nums>
+	<nums2>
+		<float count="2"/>
+	</nums2>
+</slots>
+<template>
+	<add>
+		<slot name="nums"/>
+		<slot name="nums2"/>
+	</add>
+</template>

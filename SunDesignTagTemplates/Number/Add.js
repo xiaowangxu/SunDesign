@@ -17,5 +17,6 @@ export const TAG_Add_0 =
         this.i = i;
     }
     dispose() {
+        console.log("dispose component_Add");
     }
 }`}

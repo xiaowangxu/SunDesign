@@ -4,7 +4,7 @@ const BASE =
     `class ComponentBase {
     constructor(i, c, s) {
         this.i = i ?? {};
-        this.r = null;
+        this.r = s;
     }
     init(c, s) {
     }
@@ -13,7 +13,18 @@ const BASE =
     dispose() {
     }
 }`
+const SLOT = `class component_Slot extends ComponentBase {
+    constructor(i, c, s) {
+        this.r = null;
+    }
+    init(c, s) {
 
+    }
+    update(i, c, s) {
+    }
+    dispose() {
+    }
+}`
 export {
     // TAG_Number
     BASE,

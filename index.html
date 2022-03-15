@@ -21,11 +21,11 @@
 	import * as rt from "./SunDesignRuntime.js";
 
 	const ENV = new env();
-	console.log(ENV);
 
 	console.time("compiling")
 	ENV.component("test", "./Design/Test.sdml");
 	Promise.all(ENV.promises).then(() => {
+		// ENV.generate();
 		console.log(ENV.generate());
 		// for (let i in ENV.caches)
 		// console.log(ENV.caches[i].summary());

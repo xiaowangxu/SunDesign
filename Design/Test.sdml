@@ -1,17 +1,52 @@
 <refs>
+	<!-- <component id="sub" url="./Design/Top.sdml"/>  -->
+	<component id="slots" url="./Design/Slot.sdml" />
 </refs>
 <inputs>
-	<float name="input0" default="2.0"/>
+	<!-- <float name="input0" default="2.0"/> -->
 	<bool name="input2" default="true"/>
 </inputs>
 <outputs>
-	<vec2 name="input0"/>
+	<vec2 name="input0" />
 </outputs>
 <template>
 	<add>
-		<for array="[1.0, input0]" iter="num">
-			<num n="num * 2"/>
-		</for>
-		<num n="4"/>
+		<!-- 
+		<if test="input2">
+			<for array="[1.0, input0]" iter="num">
+				<num n="num"/>
+			</for>
+		</if>
+		<for array="[1,2,3,4]" iter="num">
+			<num n="num"/>
+		</for> 
+		<sub num1="1.0" num2="45.0"/>
+		<num n="0.0"/>
+		-->
+		<slots>
+			<nums>
+				<num n="-1.0" />
+				<num n="46.0" />
+			</nums>
+			<nums2>
+				<num n="1.0" />
+				<num n="44.0" />
+			</nums2>
+		</slots>
+		<if test="input2">
+			<slots>
+				<nums>
+					<num n="-1.0" />
+					<num n="46.0" />
+				</nums>
+				<nums2>
+					<num n="1.0" />
+					<num n="44.0" />
+				</nums2>
+			</slots>
+			<for array="[1.0, 2.0]" iter="idx">
+				<num n="idx"/>
+			</for>
+		</if>
 	</add>
 </template>

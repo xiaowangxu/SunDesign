@@ -6,7 +6,6 @@ export const TAG_Number_0 =
         this.init(c, s);
     }
     init(c, s) {
-        console.log()
         this.r = {
             n: { float: [this.i.n] },
             e: {}
@@ -20,5 +19,6 @@ export const TAG_Number_0 =
         }
     }
     dispose() {
+        console.log("dispose component_Num", this.i.n);
     }
 }`}

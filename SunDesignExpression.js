@@ -1342,6 +1342,28 @@ export const SunDesignExpressionPrelude = {
 				value: "bool"
 			}, "$keep"]
 		}],
+		'>=': [
+			{
+				inputs: [
+					{
+						type: "datatype",
+						datatype: "base",
+						value: "$number"
+					}, {
+						type: "datatype",
+						datatype: "base",
+						value: "$number"
+					}
+				],
+				export: (type_1, type_2) => {
+					return [{
+						type: "datatype",
+						datatype: "base",
+						value: "bool"
+					}, "$keep"]
+				}
+			}
+		],
 		"vec2": [
 			{
 				inputs: [{
@@ -2779,7 +2801,9 @@ export const SunDesignCodeGenPassVisitor = {
 	float: (val) => val,
 	string: (val) => val,
 	'+': (a, b) => `(${a} + ${b})`,
+	'-': (a, b) => `(${a} - ${b})`,
 	'*': (a, b) => `(${a} * ${b})`,
+	'>=': (a, b) => `(${a} >= ${b})`,
 	vec2: (val, opt, codegen) => {
 		const x = codegen.walk(val.x, opt);
 		const y = codegen.walk(val.y, opt);
