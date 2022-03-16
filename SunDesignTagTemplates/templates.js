@@ -12,17 +12,8 @@ const BASE =
     }
     dispose() {
     }
-}`
-const SLOT = `class component_Slot extends ComponentBase {
-    constructor(i, c, s) {
-        this.r = null;
-    }
-    init(c, s) {
-
-    }
-    update(i, c, s) {
-    }
-    dispose() {
+    ref(id) {
+        console.log(id);
     }
 }`
 export {

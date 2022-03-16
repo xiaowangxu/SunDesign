@@ -1,18 +1,23 @@
 <refs>
 </refs>
 <inputs>
+	<float name="a" default="0.0" />
+	<float name="b" />
 </inputs>
 <slots>
 	<nums>
-		<float count="2"/>
+		<float count="2" />
 	</nums>
 	<nums2>
-		<float count="2"/>
+		<float count="2" />
 	</nums2>
 </slots>
 <template>
 	<add>
-		<slot name="nums"/>
-		<slot name="nums2"/>
+		<slot name="nums" />
+		<slot name="nums2" />
 	</add>
 </template>
+<outputs>
+	<float name="result" value="a - b" />
+</outputs>

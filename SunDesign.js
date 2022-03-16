@@ -237,6 +237,7 @@ function parse(S) {
 }
 
 const sunlang = SunDesignExpressionParser
+const CODEGEN_INPUT_BASE = 'this.i';
 
 function parse_Constant(str, name = "Source") {
 	const source = new SourceScript(str, name);
@@ -328,7 +329,7 @@ function parse_Expression(str, name = "Source", inputs, nodes) {
 		}
 
 		const walker3 = SunDesignExpressionCodeGenPass
-		const [code, opt] = walker3.generate(astnew2, { INPUTS: 'this.i' });
+		const [code, opt] = walker3.generate(astnew2, { INPUTS: CODEGEN_INPUT_BASE });
 		return [code, opt, []];
 	}
 }
@@ -622,12 +623,18 @@ class SDML_Component extends SDML_Node {
 				if (name in this.inputs) {
 					throw new Error(`duplcate input found in\n<inputs>\n\t<${type} name="${name}"/>\n</inputs>\nis invalid in ${this.url}`);
 				}
+				const datatype = ALL_INPUTS_TYPES[type].datatype();
+				if (defaultval === undefined) {
+					this.inputs[name] = {
+						uid: this.env.uid,
+						datatype: datatype,
+					}
+				}
 				else {
 					const [code, opt, err] = parse_Constant(defaultval);
 					if (err.length > 0) {
 						throw new Error(`default value parse error in\n<inputs>\n\t<${type} name="${name}"/>\n</inputs>\nin ${this.url}:\n${err.join('\n\n')}`);
 					}
-					const datatype = ALL_INPUTS_TYPES[type].datatype();
 					if (!opt.constant) {
 						throw new Error(`default value is not constant in\n<inputs>\n\t<${type} name="${name}"/>\n</inputs>\nin ${this.url}`);
 					}
@@ -650,9 +657,12 @@ class SDML_Component extends SDML_Node {
 		const outputs = this.xmlast.outputs ?? [];
 		for (let i of outputs) {
 			const type = i.tagName;
-			const { name } = i.attributes;
+			const { name, value } = i.attributes;
 			if (name === undefined) {
 				throw new Error(`output does not have a name in\n<outputs>\n\t<${type}/>\n</outputs>\nin ${this.url}`);
+			}
+			if (value === undefined) {
+				throw new Error(`output does not have a value expression in\n<outputs>\n\t<${type} name="${name}"/>\n</outputs>\nin ${this.url}`);
 			}
 			if (!test_IdentifierName(name)) {
 				throw new Error(`output's name '${name}' in\n<outputs>\n\t<${type} name="${name}"/>\n</outputs>\nis invalid in ${this.url}`);
@@ -665,6 +675,7 @@ class SDML_Component extends SDML_Node {
 					this.outputs[name] = {
 						uid: this.env.uid,
 						datatype: ALL_INPUTS_TYPES[type].datatype(),
+						str: value,
 					}
 				}
 			}
@@ -791,6 +802,14 @@ class SDML_Component extends SDML_Node {
 				...slots
 			}
 		};
+	}
+
+	get_ExportsTypes() {
+		const map = {};
+		for (const name in this.outputs) {
+			map[name] = this.outputs[name].datatype;
+		}
+		return map;
 	}
 
 	summary() {
@@ -1162,7 +1181,7 @@ class SDML_Compile_Scope {
 	}
 
 	new_Scope(template, additional_inputs = {}, keep_slots = false, parent = this) {
-		const scope = new SDML_Compile_Scope(this.env, this.urlmap, template, { ...this.inputs, ...additional_inputs }, this.outputs, keep_slots ? this.slots : {}, parent, this.opt);
+		const scope = new SDML_Compile_Scope(this.env, this.urlmap, template, { ...this.inputs, ...additional_inputs }, null, keep_slots ? this.slots : {}, parent, this.opt);
 		return scope;
 	}
 
@@ -1371,8 +1390,27 @@ class SDML_Compile_Scope {
 		}
 	}
 
+	parse_Outputs() {
+		if (this.outputs === null) return;
+		for (const output in this.outputs) {
+			const map = this.outputs[output];
+			const [exp_code, exp_opt, exp_err] = parse_Expression(map.str, `${this.uis}_export_${output}`, this.inputs_type, this.nodes_type);
+			if (exp_code === null) {
+				throw new SDML_Compile_Error(`compiling output '${output}' failed in <output test="${map.str}"/>, here are the error messages from the expression compile sub-module:\n${exp_err.join("\n\n")}`);
+			}
+			else if (!typeCheck(map.datatype, exp_opt.datatype)) {
+				throw new SDML_Compile_Error(`type-checking output '${output}' failed in <output test="${map.str}"/>, here are the current types:\nrequired: ${typeToString(map.datatype)}\nbut has: ${typeToString(exp_opt.datatype)}`);
+			}
+			else {
+				map.code = exp_code;
+				map.opt = exp_opt;
+			}
+		}
+	}
+
 	compile() {
 		this.collect_Exports(this.template);
+		this.parse_Outputs();
 		const { types, collection } = this.walk(this.template);
 		this.types = types;
 		this.collection = collection;
@@ -1511,9 +1549,17 @@ class SDML_Compiler_Visitor {
 	parse(params, ast) {
 		const err = [];
 		for (const param in params) {
-			const { datatype, default: defaultval, hook } = params[param];
+			const { datatype, default: defaultval, hook, code } = params[param];
 			let exp_str = ast.attributes[param];
 			// required
+			if (code) {
+				this.params[params[param].alias ?? param] = {
+					str: exp_str,
+					code: code,
+					opt: { constant: true },
+				}
+				continue;
+			}
 			if (defaultval === undefined) {
 				if (exp_str === undefined) {
 					err.push(`required parameter '${param}' missing in node <${this.name}/>\nyou should use <${this.name} ${param}="parameter"/> and the parameter should be type of ${typeToString(datatype)}`);
@@ -1945,27 +1991,26 @@ class SDML_If extends SDML_Compiler_Visitor {
 			['this.condition = null;'],
 			// params decl
 			['this.if_nodes = null;'],
-			// params init
-			['this.condition = this.i.$test;'],
-			// nodes init
-			[`this.r = {n: {${types.map(i => `${i}: []`).join(', ')}}, e: {}};`,
+			// init
+			['this.condition = this.i.$test;',
+				`this.r = {n: {${types.map(i => `${i}: []`).join(', ')}}, e: {}};`,
 				'if (this.condition) {',
-			...(this.true_scope ? [
-				`	const node = new closure_If_True_${this.uid}({...this.i}, {}, {})`,
-				'	this.if_nodes = node;'] : []),
-			...true_types.map(t => {
-				return `\tthis.r.n.${t}.push(...node.r.n.${t});`
-			}),
-				'}',
-
-			...(this.false_scope ? [
-				'else {',
-				`	const node = new closure_If_False_${this.uid}({...this.i}, {}, {})`,
-				'	this.if_nodes = node;',
-				...false_types.map(t => {
+				...(this.true_scope ? [
+					`	const node = new closure_If_True_${this.uid}({...this.i}, {}, {})`,
+					'	this.if_nodes = node;'] : []),
+				...true_types.map(t => {
 					return `\tthis.r.n.${t}.push(...node.r.n.${t});`
 				}),
-				'}'] : []),
+				'}',
+
+				...(this.false_scope ? [
+					'else {',
+					`	const node = new closure_If_False_${this.uid}({...this.i}, {}, {})`,
+					'	this.if_nodes = node;',
+					...false_types.map(t => {
+						return `\tthis.r.n.${t}.push(...node.r.n.${t});`
+					}),
+					'}'] : []),
 			].filter(i => i !== undefined),
 			undefined,
 			['if (this.if_nodes !== null) this.if_nodes.dispose();', `console.log("dispose component_If_${this.uid}")`]
@@ -2049,16 +2094,14 @@ class SDML_For extends SDML_Compiler_Visitor {
 			['this.nodes_array = [];'],
 			// params decl
 			['this.array = null;'],
-			// params init
-			['this.array = this.i.$array;'],
-			// nodes init
-			[`this.r = {n: {${types.map(i => `${i}: []`).join(', ')}}, e: {}};`,
+			// init
+			['this.array = this.i.$array;', `this.r = {n: {${types.map(i => `${i}: []`).join(', ')}}, e: {}};`,
 				'for (const iter of this.array) {',
-			`	const node = new closure_For_${this.uid}({...this.i, ${this.iter}: iter}, {}, {})`,
+				`	const node = new closure_For_${this.uid}({...this.i, ${this.iter}: iter}, {}, {})`,
 				'	this.nodes_array.push(node);',
-			...types.map(t => {
-				return `\tthis.r.n.${t}.push(...node.r.n.${t});`
-			}),
+				...types.map(t => {
+					return `\tthis.r.n.${t}.push(...node.r.n.${t});`
+				}),
 				'}'],
 			undefined,
 			['for (const node of this.nodes_array) {', '	node.dispose()', '}']
@@ -2142,8 +2185,11 @@ class SDML_ComponentNode extends SDML_Compiler_Visitor {
 	constructor(scope, name, id, parent, ast, component) {
 		const params = {};
 		for (const param in component.inputs) {
-			params[param] = {
-				datatype: component.inputs[param].datatype
+			params[param] = component.inputs[param].default !== undefined ? {
+				datatype: component.inputs[param].datatype,
+				code: component.inputs[param].default,
+			} : {
+				datatype: component.inputs[param].datatype,
 			}
 		}
 		super(scope, name, id, parent, ast, params);
@@ -2317,24 +2363,29 @@ function create_Component(class_name,
 	default_inputs = '{}',
 	nodes_decl = [],
 	params_decl = [],
-	params_init = [],
-	nodes_init = [],
+	init = [],
 	result,
-	nodes_dispose) {
+	nodes_dispose = [],
+	refs = []) {
 	return `class ${class_name} extends ComponentBase {
 	constructor(i, c, s) {
 		super(i ?? ${default_inputs});
 		this.r = null;${nodes_decl.map(s => `\n\t\t${s}`).join('')}${params_decl.map(s => `\n\t\t${s}`).join('')}
 		this.init(c, s);
 	}
-	init(c, s) {${params_init.map(s => `\n\t\t${s}`).join('')}${nodes_init.map(s => `\n\t\t${s}`).join('')}${result === undefined ? '' : `\n		this.r = ${result};`}
+	init(c, s) {${init.map(s => `\n\t\t${s}`).join('')}${result === undefined ? '' : `\n		this.r = ${result};`}
 	}
 	update(i, c, s) {
 	}
 	dispose() {${nodes_dispose.map(s => `\n\t\t${s}`).join('')}
 	}
+	ref(id) {
+		switch (id) { ${refs.map(([id, cache]) => `\n\t\t\tcase '${id}': return this.${cache};`).join('')}
+		}
+	}
 }`
 }
+
 class SDML_Compile_CodeGen {
 	constructor(env, class_name, scope, opt) {
 		this.opt = { ...opt };
@@ -2343,10 +2394,17 @@ class SDML_Compile_CodeGen {
 		this.scope = scope;
 		this.nodes = new Map();
 		this.params = new Map();
+		this.noderefs = new Set();
+		this.nodemap = {};
 	}
 
 	get_NodeCache(node) {
 		return this.nodes.get(node);
+	}
+
+	get_NodeCache_with_ID(id) {
+		const node = this.scope.nodemap[id];
+		return this.get_NodeCache(node);
 	}
 
 	get_NodeParamCache(node, param) {
@@ -2388,13 +2446,27 @@ class SDML_Compile_CodeGen {
 		return ans;
 	}
 
-	get_ParamsInit() {
+	get_Refs() {
+		return [...this.noderefs].map(id => [id, this.get_NodeCache_with_ID(id)]);
+	}
+
+	get_Init() {
 		const ans = [];
-		this.params.forEach((val, key) => {
-			for (const param in val)
-				if (!key.params[param].opt.constant)
-					ans.push(`this.${val[param]} = ${key.params[param].code};`)
-		})
+		for (const node of this.scope.order) {
+			const obj_name = node.get_NewNode(this);
+			const custom_init = node.get_CustomInit(obj_name);
+			// param init
+			const params = this.params.get(node)
+			for (const param in params) {
+				if (!node.params[param].opt.constant)
+					ans.push(`this.${params[param]} = ${node.params[param].code};`)
+			}
+
+			if (custom_init !== null)
+				ans.push(`this.${this.get_NodeCache(node)} = ${custom_init};`)
+			else
+				ans.push(`this.${this.get_NodeCache(node)} = new ${obj_name}(${this.get_NodeInputs(node)}, ${this.get_NodeChildren(node)}, ${this.get_NodeSlots(node)});`)
+		}
 		return ans;
 	}
 
@@ -2409,7 +2481,12 @@ class SDML_Compile_CodeGen {
 			}
 			arr.push(`${type}: [${nodes_arr.join(', ')}]`)
 		}
-		return `{n:{${arr.join('\n')}}, e:{}}`
+		const arr2 = [];
+		for (const output in this.scope.outputs) {
+			const map = this.scope.outputs[output];
+			arr2.push(`${output}: ${map.code}`);
+		}
+		return `{n:{${arr.join(', ')}}, e:{${arr2.join(', ')}}}`
 	}
 
 	get_NodeInputs(node) {
@@ -2464,19 +2541,6 @@ class SDML_Compile_CodeGen {
 		return `{${arr.join(', ')}}`;
 	}
 
-	get_NodesInit() {
-		const ans = [];
-		for (const node of this.scope.order) {
-			const obj_name = node.get_NewNode(this);
-			const custom_init = node.get_CustomInit(obj_name);
-			if (custom_init !== null)
-				ans.push(`this.${this.get_NodeCache(node)} = ${custom_init};`)
-			else
-				ans.push(`this.${this.get_NodeCache(node)} = new ${obj_name}(${this.get_NodeInputs(node)}, ${this.get_NodeChildren(node)}, ${this.get_NodeSlots(node)});`)
-		}
-		return ans;
-	}
-
 	get_NodesDispose() {
 		const ans = [];
 		for (const node of [...this.nodes.keys()]) {
@@ -2494,11 +2558,19 @@ class SDML_Compile_CodeGen {
 	}
 
 	generate() {
+		for (const output in this.scope.outputs) {
+			this.scope.outputs[output].opt.ids.forEach(n => {
+				this.noderefs.add(n);
+			});
+		}
 		for (const node of this.scope.order) {
 			node.generate(this);
 			this.nodes.set(node, `node_${node.uid}`);
 			const map = {};
 			this.params.set(node, map);
+			node.noderefs.forEach(n => {
+				this.noderefs.add(n);
+			});
 			for (const param in node.params) {
 				map[param] = `node_${node.uid}_param_${param}`;
 			}
@@ -2508,29 +2580,10 @@ class SDML_Compile_CodeGen {
 			this.get_DefaultInputs(),
 			this.get_NodesDeclaration(),
 			this.get_ParamsDeclaration(),
-			this.get_ParamsInit(),
-			this.get_NodesInit(),
+			this.get_Init(),
 			this.get_Result(),
-			this.get_NodesDispose());
-		// 		`class ${this.class_name} extends ComponentBase {
-		// 	constructor(i, c, s) {
-		//         super(i ?? ${this.get_DefaultInputs()});
-		//         this.r = null;
-		// ${this.get_NodesDeclaration().map(s => `\t\t${s}`).join('\n')}
-		// ${this.get_ParamsDeclaration().map(s => `\t\t${s}`).join('\n')}
-		//         this.init(c, s);
-		//     }
-		// 	init(c, s) {
-		// ${this.get_ParamsInit().map(s => `\t\t${s}`).join('\n')}
-		// ${this.get_NodesInit().map(s => `\t\t${s}`).join('\n')}
-		// 		this.r = ${this.get_Result()};
-		// 	}
-		// 	update(i, c, s) {
-		// 	}
-		// 	dispose() {
-		// ${[...this.nodes.values()].map(i => `\t\tthis.${i}.dispose()`).join('\n')}
-		// 	}
-		// }`
+			this.get_NodesDispose(),
+			this.get_Refs());
 	}
 }
 
@@ -2601,4 +2654,6 @@ class BitMask {
 }
 
 // const a = new BitMask(['a', 'b', 'c', 'a1', 'b1', 'c1', 'a2', 'b2', 'c2', 'a3', 'b3', 'c3', 'a4', 'b4', 'c4', 'a5', 'b5', 'c5', 'a6', 'b6', 'c6', 'a7', 'b7', 'c7', 'a8', 'b8', 'c8', 'a9', 'b9', 'c9', 'a10', 'b10', 'c10', 'a11', 'b11', 'c11', 'a12', 'b12', 'c12']);
-// console.log(a.get_Masks(['a', 'c12']));
+// const b = new BitMask();
+// const a = new BitMask([1, b, 'a']);
+// console.log(a.get_Masks([b]));

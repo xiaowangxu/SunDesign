@@ -2796,10 +2796,10 @@ class OptimizationPass {
 export const SunDesignExpressionOptimizationPass = new OptimizationPass()
 
 export const SunDesignCodeGenPassVisitor = {
-	int: (val) => val,
+	int: (val) => val.toString(),
 	bool: (val) => val ? 'true' : 'false',
-	float: (val) => val,
-	string: (val) => val,
+	float: (val) => val.toString(),
+	string: (val) => `'${val}'`,
 	'+': (a, b) => `(${a} + ${b})`,
 	'-': (a, b) => `(${a} - ${b})`,
 	'*': (a, b) => `(${a} * ${b})`,
@@ -2844,7 +2844,7 @@ class CodeGenPass {
 
 	noderef(ast, opt) {
 		opt.ids.add(ast.id)
-		return `${ast.func}('${ast.id}', '${ast.identifier}')`;
+		return `this.ref('${ast.id}').r.e.${ast.identifier}`;
 	}
 
 	func(ast, opt) {
@@ -2874,9 +2874,10 @@ class CodeGenPass {
 	}
 
 	generate(ast, opt = {}) {
-		opt = { constant: false, deps: new Set(), ids: new Set(), datatype: { type: 'datatype', datatype: 'base', value: 'unknown' }, THREE: 'ENV.THREE', FUNCS: 'ENV.FUNCS', INPUTS: 'INPUTS', ...opt };
+		opt = { constant: false, deps: new Set(), ids: new Set(), datatype: { type: 'datatype', datatype: 'base', value: 'unknown' }, THREE: 'ENV.THREE', FUNCS: 'ENV.FUNCS', INPUTS: 'INPUTS', NODEMAP: {}, ...opt };
 		opt.constant = ast.constant ? true : false;
 		opt.datatype = ast.datatype ?? opt.datatype;
+		opt.ast = ast;
 		return [this.walk(ast, opt), opt];
 	}
 }
