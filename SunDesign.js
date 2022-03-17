@@ -1384,7 +1384,10 @@ class SDML_Compile_Scope {
 			const vaild = this.check_Valid(node.tagName);
 			if (vaild) {
 				const { id } = node.attributes;
-				if (id !== undefined) this.nodes_type[id] = this.get_TargetExports(node.tagName) ?? {};
+				if (id !== undefined) {
+					if (!test_IdentifierName(id)) throw new SDML_Compile_Error(`id is not a valid identifier string in node <${node.tagName} id="${id}"/>`);
+					this.nodes_type[id] = this.get_TargetExports(node.tagName) ?? {};
+				}
 			}
 			this.collect_Exports(node.children);
 		}
@@ -2233,14 +2236,28 @@ class SDML_ComponentNode extends SDML_Compiler_Visitor {
 
 	get_NodeSlots(codegen) {
 		const ans = {};
+		const set = new Set(Object.keys(this.component.slots));
 		for (const slot_name of this.collection.slots_name) {
+			set.delete(slot_name);
 			const slot = this.collection.get(slot_name);
 			const map = {};
 			ans[slot_name] = map;
+			const type_set = new Set(this.component.slots[slot_name].types.type_names);
 			for (const type in slot) {
+				type_set.delete(type);
 				map[type] = [...this.collection.get_Class(slot_name, type)];
 			}
+			type_set.forEach(type => {
+				map[type] = [];
+			})
 		}
+		set.forEach(slot_name => {
+			const map = {};
+			ans[slot_name] = map;
+			for (const type of this.component.slots[slot_name].types.type_names) {
+				map[type] = [];
+			}
+		})
 		return ans;
 	}
 

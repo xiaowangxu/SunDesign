@@ -6,7 +6,7 @@
 </inputs>
 <slots>
 	<nums>
-		<float count="2" />
+		<float />
 	</nums>
 	<nums2>
 		<float count="2" />

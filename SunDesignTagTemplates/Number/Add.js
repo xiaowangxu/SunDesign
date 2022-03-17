@@ -9,7 +9,7 @@ export const TAG_Add_0 =
         const ans = c.default.float.reduce((f, sum) => sum += f, 0);
         this.r = {
             n: { float: [ans] },
-            e: {}
+            e: { result: ans }
         }
     }
     update(i, c, s) {

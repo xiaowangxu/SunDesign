@@ -22,7 +22,7 @@ class component_Add extends ComponentBase {
         const ans = c.default.float.reduce((f, sum) => sum += f, 0);
         this.r = {
             n: { float: [ans] },
-            e: {}
+            e: { result: ans }
         }
     }
     update(i, c, s) {
@@ -90,42 +90,37 @@ class component_Component_0 extends ComponentBase {
     constructor(i, c, s) {
         super(i ?? { input2: true });
         this.r = null;
-        this.node_17 = null;
+        this.node_16 = null;
+        this.node_18 = null;
         this.node_19 = null;
         this.node_21 = null;
-        this.node_23 = null;
-        this.node_24 = null;
-        this.node_26 = null;
-        this.node_27 = null;
-        this.node_26_param_n = null;
+        this.node_22 = null;
+        this.node_21_param_n = null;
         this.init(c, s);
     }
     init(c, s) {
-        this.node_17 = new component_Num({ n: -1 }, {}, {});
-        this.node_19 = new component_Num({ n: 46 }, {}, {});
-        this.node_21 = new component_Num({ n: 1 }, {}, {});
-        this.node_23 = new component_Num({ n: 44 }, {}, {});
-        this.node_24 = new component_Component_3({ a: 0, b: 4 }, {}, { nums: { float: [...this.node_17.r.n.float, ...this.node_19.r.n.float] }, nums2: { float: [...this.node_21.r.n.float, ...this.node_23.r.n.float] } });
-        this.node_26_param_n = (this.ref('slots').r.e.result * 2);
-        this.node_26 = new component_Num({ n: this.node_26_param_n }, {}, {});
-        this.node_27 = new component_Add({}, { default: { float: [...this.node_24.r.n.float, ...this.node_26.r.n.float] } }, {});
-        this.r = { n: { float: [...this.node_27.r.n.float] }, e: { input0: (this.ref('slots').r.e.result - 1) } };
+        this.node_16 = new component_Num({ n: 1 }, {}, {});
+        this.node_18 = new component_Num({ n: 44 }, {}, {});
+        this.node_19 = new component_Component_3({ a: 0, b: 4 }, {}, { nums2: { float: [...this.node_16.r.n.float, ...this.node_18.r.n.float] }, nums: { float: [] } });
+        this.node_21_param_n = (this.ref('slots').r.e.result * 2);
+        this.node_21 = new component_Num({ n: this.node_21_param_n }, {}, {});
+        this.node_22 = new component_Add({}, { default: { float: [...this.node_19.r.n.float, ...this.node_21.r.n.float] } }, {});
+        this.r = { n: { float: [...this.node_22.r.n.float] }, e: { input0: (this.ref('add').r.e.result - 1) } };
     }
     update(i, c, s) {
     }
     dispose() {
-        this.node_17.dispose();
+        this.node_16.dispose();
+        this.node_18.dispose();
         this.node_19.dispose();
         this.node_21.dispose();
-        this.node_23.dispose();
-        this.node_24.dispose();
-        this.node_26.dispose();
-        this.node_27.dispose();
+        this.node_22.dispose();
         console.log(`dispose component_Component_0`);
     }
     ref(id) {
         switch (id) {
-            case 'slots': return this.node_24;
+            case 'add': return this.node_22;
+            case 'slots': return this.node_19;
         }
     }
 }
