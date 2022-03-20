@@ -448,6 +448,12 @@ export class Environment {
 		return this.caches[url];
 	}
 
+	get_ClassName(name) {
+		if (name in this.urlmap)
+			return this.get(this.urlmap[name]).class_name;
+		return undefined;
+	}
+
 	add_Template(name, code) {
 		this.used_templates.set(name, code);
 	}
@@ -469,6 +475,7 @@ class SDML_Node {
 		};
 		this.env = env;
 		this.uid = this.env.uid;
+		this.class_name = `component_Component_${this.uid}`;
 		this.inputs = {};
 		this.outputs = {};
 		this.compiled = false;
@@ -495,6 +502,9 @@ class SDML_Node {
 
 	get_ExportsTypes() {
 		return Types.NONE;
+	}
+
+	get_SDMLNodeInstance(scope, name, id, parent, ast) {
 	}
 }
 
@@ -536,7 +546,6 @@ const ALL_INPUTS_TYPES = {
 class SDML_Component extends SDML_Node {
 	constructor(env, url, sdml, onready, onreject) {
 		super(env);
-		this.class_name = `component_Component_${this.uid}`;
 		this.url = url;
 		this.xmlast = {
 			refs: null,
@@ -774,10 +783,10 @@ class SDML_Component extends SDML_Node {
 			throw new Error(`types do not match:\nthe desired types are:\n${this.types.to_List().map(i => `* ${i}`).join("\n")}\nbut the compiled results are:\n${this.compile_res.types.to_List().map(i => `* ${i}`).join("\n")}`);
 		}
 		this.types = this.compile_res.types;
-		const mermaid = this.compile_res.to_Mermaid();
-		render_Graph(mermaid).then(svg => {
-			console.log(`Graph Preview:\n\t%c %c`, `border: black 1px solid; background: url("data:image/svg+xml;base64,${btoa(svg)}") no-repeat center; padding: 180px 180px; background-size: contain;`, "");
-		})
+		// const mermaid = this.compile_res.to_Mermaid();
+		// render_Graph(mermaid).then(svg => {
+		// 	console.log(`Graph Preview: ${this.url}\n\t%c %c`, `border: black 1px solid; background: url("data:image/svg+xml;base64,${btoa(svg)}") no-repeat center; padding: 180px 280px; background-size: contain;`, "");
+		// })
 		const codegen = new SDML_Compile_CodeGen(this.env, this.class_name, this.compile_res);
 		const code = codegen.generate();
 		this.env.add_Template(this.class_name, code);
@@ -810,6 +819,10 @@ class SDML_Component extends SDML_Node {
 			map[name] = this.outputs[name].datatype;
 		}
 		return map;
+	}
+
+	get_SDMLNodeInstance(scope, name, id, parent, ast) {
+		return new SDML_ComponentNode(scope, name, id, parent, ast, this);
 	}
 
 	summary() {
@@ -1177,6 +1190,7 @@ class SDML_Compile_Scope {
 		this.inputs_type = this.get_InputsTypes();
 		this.nodes_type = {};
 		this.param_link = [];
+		this.scope_deps = new Set();
 		this.compile();
 	}
 
@@ -1240,7 +1254,7 @@ class SDML_Compile_Scope {
 		}
 		if (tagName in this.urlmap) {
 			const component = this.env.get(this.urlmap[tagName]);
-			return new SDML_ComponentNode(this, tagName, id, parent, ast, component);
+			return component.get_SDMLNodeInstance(this, tagName, id, parent, ast);
 		}
 	}
 	/**
@@ -1379,6 +1393,12 @@ class SDML_Compile_Scope {
 		})
 	}
 
+	registe_Deps(deps) {
+		deps.forEach(i => {
+			this.scope_deps.add(i);
+		})
+	}
+
 	collect_Exports(ast) {
 		for (const node of ast) {
 			const vaild = this.check_Valid(node.tagName);
@@ -1407,6 +1427,7 @@ class SDML_Compile_Scope {
 			else {
 				map.code = exp_code;
 				map.opt = exp_opt;
+				this.registe_Deps(map.opt.deps);
 			}
 		}
 	}
@@ -1420,6 +1441,7 @@ class SDML_Compile_Scope {
 		for (const id in this.nodemap) {
 			const node = this.nodemap[id];
 			this.registe_NodeRefs(node, node.noderefs);
+			this.registe_Deps(node.deps);
 		}
 		try {
 			this.order = this.graph.get_TopologicalOrder();
@@ -1441,24 +1463,6 @@ class SDML_Compile_Scope {
 
 	$to_Mermaid(ans = [], link = []) {
 		const inputs = [];
-		for (const id in this.nodemap) {
-			const node = this.nodemap[id];
-			const deps = node.deps;
-			deps.forEach(input => {
-				let _last = this;
-				let cnt = this;
-				while (true) {
-					if (cnt === null) break;
-					if (cnt.parent === null || (input in cnt.parent.inputs));
-					else {
-						break;
-					}
-					_last = cnt;
-					cnt = cnt.parent;
-				}
-				link.push(`Input_${input}_${_last.uid} --> |dep| Node_${node.uid}`)
-			});
-		}
 		for (const input in this.inputs) {
 			let flag = true;
 			let _last = this;
@@ -1477,6 +1481,27 @@ class SDML_Compile_Scope {
 			if (flag)
 				inputs.push(`Input_${input}_${_last.uid}((${input}))`);
 		}
+		for (const id in this.nodemap) {
+			const node = this.nodemap[id];
+			const deps = node.deps;
+			deps.forEach(input => {
+				let _last = this;
+				let cnt = this;
+				while (true) {
+					// console.log(cnt, _last, input)
+					if (cnt.parent === null) {
+						_last = cnt;
+						break;
+					} else if (!(input in cnt.parent.inputs)) {
+						break;
+					}
+					_last = cnt;
+					cnt = cnt.parent;
+				}
+				link.push(`Input_${input}_${cnt.uid} --> |dep| Node_${node.uid}`)
+			});
+		}
+
 		for (const slot in this.slots) {
 			if (!this.parent || !(slot in this.parent.slots))
 				inputs.push(`Slot_${slot}>${slot}]`)
@@ -1515,7 +1540,6 @@ class SDML_Compiler_Visitor {
 	static entries = [];
 	static inputs = {};
 	static exports = {};
-	static include_inputs = false;
 
 	compile() {
 		console.log(this);
@@ -1626,8 +1650,20 @@ class SDML_Compiler_Visitor {
 		return null;
 	}
 
+	get_CustomInputs() {
+		return {};
+	}
+
+	get_CustomUpdate(codegen, nodename) {
+		return null;
+	}
+
 	get_CustomDispose(nodename) {
 		return null;
+	}
+
+	get_ScopedInputs(codegen) {
+		return [];
 	}
 
 	get_NodeSlots(codegen) {
@@ -1938,11 +1974,12 @@ class SDML_If extends SDML_Compiler_Visitor {
 			// 	throw new SDML_Compile_Error(`in node <if id="${this.id}"/> the types of the true branch is not the same as the false branch:\nthe true branch types is:\n${true_types.to_List().map(i => `\t${i}`).join('\n')}\nthe false branch types is:\n${false_types.to_List().map(i => `\t${i}`).join('\n')}`);
 			// }
 		}
+		if (this.true_scope) this.deps = new Set([...this.deps, ...this.true_scope.scope_deps]);
+		if (this.false_scope) this.deps = new Set([...this.deps, ...this.false_scope.scope_deps]);
 	}
 
 	static entries = [];
 	static inputs = Types.IGNORE;
-	static include_inputs = true;
 
 	to_Mermaid(ans, link) {
 		let str = `Node_${this.uid}(if id=${this.id})`;
@@ -1989,7 +2026,9 @@ class SDML_If extends SDML_Compiler_Visitor {
 			// class_name
 			`component_If_${this.uid}`,
 			// default_inputs
-			`{$test: false}`,
+			['$test: false', ...parent_codegen.get_DefaultInputs([...this.deps])],
+			// bit masks
+			0,
 			// nodes decl
 			['this.condition = null;'],
 			// params decl
@@ -1999,7 +2038,7 @@ class SDML_If extends SDML_Compiler_Visitor {
 				`this.r = {n: {${types.map(i => `${i}: []`).join(', ')}}, e: {}};`,
 				'if (this.condition) {',
 				...(this.true_scope ? [
-					`	const node = new closure_If_True_${this.uid}({...this.i}, {}, {})`,
+					`	const node = new closure_If_True_${this.uid}({${[...this.true_scope.scope_deps].map(i => `${i}: this.i.${i}`).join(', ')}}, {}, {})`,
 					'	this.if_nodes = node;'] : []),
 				...true_types.map(t => {
 					return `\tthis.r.n.${t}.push(...node.r.n.${t});`
@@ -2015,6 +2054,8 @@ class SDML_If extends SDML_Compiler_Visitor {
 					}),
 					'}'] : []),
 			].filter(i => i !== undefined),
+			// diff
+			[],
 			undefined,
 			['if (this.if_nodes !== null) this.if_nodes.dispose();', `console.log("dispose component_If_${this.uid}")`]
 		);
@@ -2024,6 +2065,17 @@ class SDML_If extends SDML_Compiler_Visitor {
 
 	get_NewNode() {
 		return `component_If_${this.uid}`;
+	}
+
+	get_CustomInputs() {
+		const ans = {};
+		this.deps.forEach(i => {
+			ans[i] = {
+				constant: true,
+				code: `this.i.${i}`,
+			}
+		});
+		return ans;
 	}
 
 	get_Type() {
@@ -2055,11 +2107,12 @@ class SDML_For extends SDML_Compiler_Visitor {
 		}
 		this.for_loop = this.scope.new_Scope(ast.children, { [this.iter]: { uid: this.scope.env.uid, default: 'null', datatype: this.params.$array.opt.datatype.value } });
 		this.types = this.for_loop.types.clone().make_Infinity();
+		this.deps = new Set([...this.deps, ...this.for_loop.scope_deps]);
+		this.deps.delete(this.iter);
 	}
 
 	static entries = [];
 	static inputs = Types.IGNORE;
-	static include_inputs = true;
 
 	to_Mermaid(ans, link) {
 		let str = `Node_${this.uid}(for id=${this.id})`;
@@ -2084,6 +2137,7 @@ class SDML_For extends SDML_Compiler_Visitor {
 	}
 
 	generate(parent_codegen) {
+		console.log(this.for_loop);
 		const codegen = new SDML_Compile_CodeGen(parent_codegen.env, `closure_For_${this.uid}`, this.for_loop, {});
 		const code = codegen.generate();
 		codegen.env.add_Template(`closure_For_${this.uid}`, code);
@@ -2092,7 +2146,9 @@ class SDML_For extends SDML_Compiler_Visitor {
 			// class_name
 			`component_For_${this.uid}`,
 			// default_inputs
-			`{$array:[]}`,
+			['$array:[]', ...codegen.get_DefaultInputs([...this.deps])],
+			// bit masks
+			0,
 			// nodes decl
 			['this.nodes_array = [];'],
 			// params decl
@@ -2106,14 +2162,37 @@ class SDML_For extends SDML_Compiler_Visitor {
 					return `\tthis.r.n.${t}.push(...node.r.n.${t});`
 				}),
 				'}'],
+			// diff
+			[],
 			undefined,
-			['for (const node of this.nodes_array) {', '	node.dispose()', '}']
+			['for (const node of this.nodes_array) {', '	node.dispose();', '}', 'this.nodes_array = [];'],
+			[],
+			['this.i = i;',
+				'this.dispose();',
+				'this.init(c, s);',
+				'return true;',
+			]
 		);
 		codegen.env.add_Template(`component_For_${this.uid}`, for_code);
 	}
 
 	get_NewNode() {
 		return `component_For_${this.uid}`;
+	}
+
+	get_CustomInputs() {
+		const ans = {};
+		this.deps.forEach(i => {
+			ans[i] = {
+				constant: true,
+				code: `this.i.${i}`,
+			}
+		});
+		return ans;
+	}
+
+	get_ScopedInputs(codegen) {
+		return [...this.deps];
 	}
 
 	get_Type() {
@@ -2169,6 +2248,11 @@ class SDML_Slot extends SDML_Compiler_Visitor {
 
 	get_CustomInit(nodename, type) {
 		return `s.${this.slotname}`;
+	}
+
+	get_CustomUpdate(codegen, nodename) {
+		const [[layer, mask]] = codegen.bitmasks.get_Masks([codegen.get_MaskedName(codegen.get_NodeCache(this))]);
+		return [`this.b[${layer}] |= ${mask};`, `this.${nodename} = s.${this.slotname};`];
 	}
 
 	get_CustomDispose(nodename) {
@@ -2377,22 +2461,32 @@ class SDML_Number extends SDML_Compiler_Visitor {
 }
 
 function create_Component(class_name,
-	default_inputs = '{}',
+	default_inputs = [],
+	bit_masks = 0,
 	nodes_decl = [],
 	params_decl = [],
 	init = [],
+	diff = [],
 	result,
 	nodes_dispose = [],
-	refs = []) {
+	refs = [],
+	updates = [],) {
+	const bitmasks = [];
+	for (let i = 0; i < bit_masks; i++) {
+		bitmasks.push('0');
+	}
 	return `class ${class_name} extends ComponentBase {
-	constructor(i, c, s) {
-		super(i ?? ${default_inputs});
+	constructor(i = {}, c, s) {
+		super({${default_inputs.join(', ')}, ...i}, [${bitmasks.join(', ')}]);
 		this.r = null;${nodes_decl.map(s => `\n\t\t${s}`).join('')}${params_decl.map(s => `\n\t\t${s}`).join('')}
 		this.init(c, s);
 	}
 	init(c, s) {${init.map(s => `\n\t\t${s}`).join('')}${result === undefined ? '' : `\n		this.r = ${result};`}
 	}
+	diff(i) {${diff.map(s => `\n\t\t${s}`).join('')}
+	}
 	update(i, c, s) {
+		this.diff(i);${updates.map(s => `\n\t\t${s}`).join('')}
 	}
 	dispose() {${nodes_dispose.map(s => `\n\t\t${s}`).join('')}
 	}
@@ -2413,6 +2507,7 @@ class SDML_Compile_CodeGen {
 		this.params = new Map();
 		this.noderefs = new Set();
 		this.nodemap = {};
+		this.bitmasks = null;
 	}
 
 	get_NodeCache(node) {
@@ -2436,13 +2531,24 @@ class SDML_Compile_CodeGen {
 		return name;
 	}
 
-	get_DefaultInputs() {
-		const arr = [];
-		const map = this.scope.inputs;
-		for (const param in map) {
-			arr.push(`${param}: ${map[param].default}`);
+	get_DefaultInputs(inputs = undefined) {
+		if (inputs) {
+			const arr = [];
+			const map = this.scope.inputs;
+			for (const param of inputs) {
+				arr.push(`${param}: ${map[param].default ?? 'null'}`);
+			}
+			return arr;
 		}
-		return `{${arr.join(', ')}}`;
+		else {
+			const arr = [];
+			const deps = [...this.scope.scope_deps];
+			const map = this.scope.inputs;
+			for (const param of deps) {
+				arr.push(`${param}: ${map[param].default ?? 'null'}`);
+			}
+			return arr;
+		}
 	}
 
 	get_NodesDeclaration() {
@@ -2467,6 +2573,25 @@ class SDML_Compile_CodeGen {
 		return [...this.noderefs].map(id => [id, this.get_NodeCache_with_ID(id)]);
 	}
 
+	get_Diffs() {
+		const ans = [];
+		const bitmasks = [];
+		for (let i = 0; i < this.bitmasks.mask_count; i++) {
+			bitmasks.push('0');
+		}
+		ans.push(`this.b = [${bitmasks.join(', ')}];`);
+		for (const dep of this.scope.scope_deps) {
+			ans.push(`if (i.${dep} !== undefined && i.${dep} !== this.i.${dep}) {`);
+			const arr = this.bitmasks.get_Masks([dep]);
+			for (const [idx, mask] of arr) {
+				ans.push(`	this.i.${dep} = i.${dep};`);
+				ans.push(`	this.b[${idx}] |= ${mask};`);
+			}
+			ans.push(`}`);
+		}
+		return ans;
+	}
+
 	get_Init() {
 		const ans = [];
 		for (const node of this.scope.order) {
@@ -2487,16 +2612,21 @@ class SDML_Compile_CodeGen {
 		return ans;
 	}
 
+	get_TypedResult(children, type) {
+		const nodes_arr = [];
+		for (const node of children[type]) {
+			const node_name = this.get_NodeCache(node);
+			nodes_arr.push(`...this.${node_name}.r.n.${type}`);
+		}
+		return nodes_arr;
+	}
+
 	get_Result() {
 		const collection = this.scope.collection.get('default');
 		const arr = [];
 		for (const type in collection) {
-			const nodes_arr = [];
-			for (const node of collection[type]) {
-				const node_name = this.get_NodeCache(node);
-				nodes_arr.push(`...this.${node_name}.r.n.${type}`);
-			}
-			arr.push(`${type}: [${nodes_arr.join(', ')}]`)
+			const nodes_arr = this.get_TypedResult(collection, type);
+			arr.push(`${type}: [${nodes_arr.join(', ')}]`);
 		}
 		const arr2 = [];
 		for (const output in this.scope.outputs) {
@@ -2507,8 +2637,16 @@ class SDML_Compile_CodeGen {
 	}
 
 	get_NodeInputs(node) {
-		const arr = node.constructor.include_inputs ? ['...this.i'] : [];
+		const arr = [];
 		const map = this.params.get(node);
+		const custom_inputs = node.get_CustomInputs();
+		for (const param in custom_inputs) {
+			const input = custom_inputs[param];
+			if (input.constant)
+				arr.push(`${param}: ${input.code}`);
+			else
+				arr.push(`${param}: this.${map[param]}`);
+		}
 		for (const param in map) {
 			if (node.params[param].opt.constant)
 				arr.push(`${param}: ${node.params[param].code}`);
@@ -2558,6 +2696,141 @@ class SDML_Compile_CodeGen {
 		return `{${arr.join(', ')}}`;
 	}
 
+	get_NodeUpdate(node) {
+		const node_name = this.get_NodeCache(node);
+		const custom_update = node.get_CustomUpdate(this, node_name);
+		if (custom_update !== null) return custom_update;
+		const ans = [];
+		// console.log(node);
+		// console.group(node_name);
+
+		const [[n_layer, n_mask]] = this.bitmasks.get_Masks([this.get_MaskedName(node_name)]);
+		// console.log(`layer: ${n_layer}, mask: ${n_mask}`);
+
+		const params = this.params.get(node);
+		// param update
+		// console.log(params);
+		const param_updates = [];
+		for (const param in params) {
+			if (node.params[param].opt.constant) continue;
+			const masks = [];
+			const param_name = params[param];
+			const [[p_layer, p_mask]] = this.bitmasks.get_Masks([this.get_MaskedName(param_name)]);
+			{
+				const masked_deps = [...node.params[param].opt.deps];
+				const bitmasks = this.bitmasks.get_Masks(masked_deps);
+				masks.push(...bitmasks.map(([layer, mask], idx, arr) => {
+					const len = arr.length === 1;
+					return `${len ? '' : '('}this.b[${layer}] & ${mask}${len ? '' : ')'}`;
+				}));
+			}
+			{
+				const masked_deps = [...node.params[param].opt.ids].map(i => this.get_MaskedName(this.get_NodeCache_with_ID(i)));
+				const bitmasks = this.bitmasks.get_Masks(masked_deps);
+				masks.push(...bitmasks.map(([layer, mask], idx, arr) => {
+					const len = arr.length === 1;
+					return `${len ? '' : '('}this.b[${layer}] & ${mask}${len ? '' : ')'}`;
+				}));
+			}
+			if (masks.length > 0)
+				param_updates.push(`if (${masks.join(" || ")}) {`, `	this.${param_name} = ${node.params[param].code};`, `	this.b[${p_layer}] |= ${p_mask};`,
+					// debug
+					// `	console.log(">> update ${node.name} uid: ${node.uid} - ${param}", this.b[${p_layer}]);`,
+					`}`)
+		}
+		// console.log(param_updates.join('\n'));
+		ans.push(...param_updates);
+
+		// param init
+		const masked_params = Object.entries(params).filter(([name, cachename]) => !node.params[name].opt.constant).map(([n, c]) => c).map(i => this.get_MaskedName(i));
+		const params_templates = node.get_ScopedInputs(this);
+		const children_template = node.get_NodeChildren(this);
+		const slots_template = node.get_NodeSlots(this);
+		const children = Object.values(children_template).map(i => Object.values(i)).flat(2).map(i => this.get_MaskedName(this.get_NodeCache(i)));
+		const slots = Object.values(slots_template).map(i => Object.values(i)).flat(2).map(i => this.get_MaskedName(this.get_NodeCache(i)));
+		masked_params.push(...children, ...slots, ...params_templates);
+		const bitmasks = this.bitmasks.get_Masks(masked_params);
+		const if_test = bitmasks.map(([layer, mask], idx, arr) => {
+			const len = arr.length === 1;
+			return `${len ? '' : '('}this.b[${layer}] & ${mask}${len ? '' : ')'}`;
+		});
+		if (if_test.length > 0)
+			ans.push(`if (${if_test.join(" || ")}) {`,
+				// debug
+				// `	console.log(">> update ${node.name} uid: ${node.uid}");`,
+				`	this.b[${n_layer}] |= ${n_mask} & (this.${node_name}.update(${this.get_NodeInputs(node)}, ${this.get_NodeChildren(node)}, ${this.get_NodeSlots(node)}) ? 2147483647 : 0);`,
+				`}`)
+
+		// console.log(masked_params);
+
+		// console.groupEnd(node_name);
+		return ans;
+	}
+
+	get_Update() {
+		const ans = [`let $changed = false;`];
+		for (const node of this.scope.order) {
+			// console.log(node);
+			ans.push(...this.get_NodeUpdate(node));
+		}
+		// update result
+		for (const output in this.scope.outputs) {
+			const map = this.scope.outputs[output];
+			const masked_node = [...map.opt.ids].map(i => this.get_MaskedName(this.get_NodeCache_with_ID(i)));
+			const deps = [...map.opt.deps];
+			// console.log(output, masked_node, deps);
+			const masked_deps = [...masked_node, ...deps];
+			const bitmasks = this.bitmasks.get_Masks(masked_deps);
+			const if_test = bitmasks.map(([layer, mask], idx, arr) => {
+				const len = arr.length === 1;
+				return `${len ? '' : '('}this.b[${layer}] & ${mask}${len ? '' : ')'}`;
+			});
+			if (if_test.length > 0)
+				ans.push(`if (${if_test.join(" || ")}) {`,
+					`	$changed ||= true;`,
+					`	this.r.e.${output} = ${map.code};`,
+					`}`)
+		}
+		// update nodes
+		// console.log(this.scope.collection);
+		const slots = this.scope.collection.get('default');
+		for (const type_name in slots) {
+			const nodes = [...slots[type_name]];
+			const masked_nodes = nodes.map(i => this.get_MaskedName(this.get_NodeCache(i)));
+			const bitmasks = this.bitmasks.get_Masks(masked_nodes);
+			const if_test = bitmasks.map(([layer, mask], idx, arr) => {
+				const len = arr.length === 1;
+				return `${len ? '' : '('}this.b[${layer}] & ${mask}${len ? '' : ')'}`;
+			});
+			if (if_test.length > 0)
+				ans.push(`if (${if_test.join(" || ")}) {`,
+					`	$changed ||= true;`,
+					`	this.r.n.${type_name} = [${this.get_TypedResult(slots, type_name).join(', ')}];`,
+					`}`)
+		}
+
+		// ans.push(`console.log(">>> updated component_${this.scope.uid}", $changed);`);
+		ans.push('return $changed;');
+		// for (const output in this.scope.outputs) {
+		// 	const map = this.scope.outputs[output];
+		// 	const masked_node = [...map.opt.ids].map(i => this.get_MaskedName(this.get_NodeCache_with_ID(i)));
+		// 	const deps = [...map.opt.deps];
+		// 	// console.log(output, masked_node, deps);
+		// 	const masked_deps = [...masked_node, deps];
+		// 	const bitmasks = this.bitmasks.get_Masks(masked_deps);
+		// 	const if_test = bitmasks.map(([layer, mask], idx, arr) => {
+		// 		const len = arr.length === 1;
+		// 		return `${len ? '' : '('}this.b[${layer}] & ${mask}${len ? '' : ')'}`;
+		// 	});
+		// 	if (if_test.length > 0)
+		// 		ans.push(`if (${if_test.join(" || ")}) {`,
+		// 			`	this.r.e.${output} = ${map.code};`,
+		// 			`}`)
+		// }
+		// console.log(ans.join('\n'));
+		return ans;
+	}
+
 	get_NodesDispose() {
 		const ans = [];
 		for (const node of [...this.nodes.keys()]) {
@@ -2570,37 +2843,53 @@ class SDML_Compile_CodeGen {
 			else
 				ans.push(`this.${node_name}.dispose();`);
 		}
-		ans.push(`console.log(\`dispose ${this.class_name}\`);`)
+		// ans.push(`console.log(\`dispose ${this.class_name}\`);`);
 		return ans;
 	}
 
+	get_MaskedName(name) {
+		return `$$${name}`;
+	}
+
 	generate() {
+		const deps_nodes_arr = [...this.scope.scope_deps];
 		for (const output in this.scope.outputs) {
 			this.scope.outputs[output].opt.ids.forEach(n => {
 				this.noderefs.add(n);
 			});
 		}
 		for (const node of this.scope.order) {
+			const node_name = `node_${node.uid}`;
+			deps_nodes_arr.push(this.get_MaskedName(node_name));
 			node.generate(this);
-			this.nodes.set(node, `node_${node.uid}`);
+			this.nodes.set(node, node_name);
 			const map = {};
 			this.params.set(node, map);
 			node.noderefs.forEach(n => {
 				this.noderefs.add(n);
 			});
 			for (const param in node.params) {
-				map[param] = `node_${node.uid}_param_${param}`;
+				const param_name = `node_${node.uid}_param_${param}`
+				map[param] = param_name;
+				// console.log(param, param_name, node.params[param].opt.constant);
+				if (!node.params[param].opt.constant)
+					deps_nodes_arr.push(this.get_MaskedName(param_name));
 			}
 			// console.log(this.get_NodeInputs(node));
 		}
+		this.bitmasks = new BitMask(deps_nodes_arr);
+		// console.log(this.bitmasks);
 		return create_Component(this.class_name,
 			this.get_DefaultInputs(),
+			this.bitmasks.mask_count,
 			this.get_NodesDeclaration(),
 			this.get_ParamsDeclaration(),
 			this.get_Init(),
+			this.get_Diffs(),
 			this.get_Result(),
 			this.get_NodesDispose(),
-			this.get_Refs());
+			this.get_Refs(),
+			this.get_Update());
 	}
 }
 
@@ -2663,6 +2952,10 @@ class BitMask {
 			}
 		}
 		return Object.entries(ans).map(([cnt, pos]) => [parseInt(cnt), pos]);
+	}
+
+	get mask_count() {
+		return this.int_count;
 	}
 
 	to_String() {

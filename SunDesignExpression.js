@@ -2797,7 +2797,7 @@ export const SunDesignExpressionOptimizationPass = new OptimizationPass()
 
 export const SunDesignCodeGenPassVisitor = {
 	int: (val) => val.toString(),
-	bool: (val) => val ? 'true' : 'false',
+	bool: (val) => val.toString(),
 	float: (val) => val.toString(),
 	string: (val) => `'${val}'`,
 	'+': (a, b) => `(${a} + ${b})`,

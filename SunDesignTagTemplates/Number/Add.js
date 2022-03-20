@@ -13,8 +13,13 @@ export const TAG_Add_0 =
         }
     }
     update(i, c, s) {
-        const last_inputs = this.i;
-        this.i = i;
+        const ans = c.default.float.reduce((f, sum) => sum += f, 0);
+        if (ans !== this.r.n.float[0]) {
+            this.r.n.float[0] = ans;
+            this.r.e.result = ans;
+            return true;
+        }
+        return false;
     }
     dispose() {
         console.log("dispose component_Add");

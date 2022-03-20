@@ -2,23 +2,23 @@ export const TAG_Number_0 =
 {
     name: 'component_Num', code: `class component_Num extends ComponentBase {
     constructor(i, c, s) {
-        super(i ?? { n: 0 });
-        this.init(c, s);
+        super();
+        this.init(i, c, s);
     }
-    init(c, s) {
+    init(i, c, s) {
         this.r = {
-            n: { float: [this.i.n] },
+            n: { float: [i.n] },
             e: {}
         }
     }
     update(i, c, s) {
-        const last_inputs = this.i;
-        this.i = i;
-        if (inputs.n !== last_inputs.n) {
+        if (i.n !== this.r.n.float[0]) {
             this.r.n.float[0] = i.n;
+            return true;
         }
+        return false;
     }
     dispose() {
-        console.log("dispose component_Num", this.i.n);
+        // console.log("dispose component_Num");
     }
 }`}

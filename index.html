@@ -24,12 +24,28 @@
 
 	console.time("compiling")
 	ENV.component("test", "./Design/Test.sdml");
+	console.log(ENV);
 	Promise.all(ENV.promises).then(() => {
+		console.log(ENV.caches);
 		// ENV.generate();
-		console.log(ENV.generate());
-		// for (let i in ENV.caches)
-		// console.log(ENV.caches[i].summary());
-		// console.warn(ENV.caches)
+		const code = ENV.generate();
+		const entry = ENV.get_ClassName("test");
+		console.log(code);
+		const func = new Function(`${code}\nconst $$ = new ${entry}();\nreturn $$;`);
+		const $$ = func();
+		console.log($$);
+		console.log($$.r.n.float);
+		$$.update({ number2: 3.0 });
+		console.log($$.r.n.float);
+		$$.update({ number2: 4.0 });
+		console.log($$.r.n.float);
+		console.time("updating")
+		for (let i = 0; i < 10000; i++) {
+			const ans = $$.update({ number2: Math.floor(i / 100) });
+			if (ans) console.log("updated!!!");
+		}
+		console.timeEnd("updating")
+		console.log($$.r.n.float);
 	}).finally(() => {
 		console.timeEnd("compiling");
 	})

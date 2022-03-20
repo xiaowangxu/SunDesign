@@ -3,18 +3,16 @@
 	<component id="slots" url="./Design/Slot.sdml" />
 </refs>
 <inputs>
-	<!-- <float name="input0" default="2.0"/> -->
-	<bool name="input2" default="true" />
+	<float name="number1" default="5.0" />
+	<float name="number2" default="2.0" />
+	<bool name="test" default="true" />
 </inputs>
 <template>
+	<!-- 6*num2 -->
 	<add id="add">
-		<slots id="slots" b="4.0">
-			<nums2>
-				<num n="1.0" />
-				<num n="44.0" />
-			</nums2>
-		</slots>
-		<num n="#slots.result * 2" />
+		<for array="[1.0, 2.0, 3.0]" iter="num">
+			<num n="num * number2" />
+		</for>
 	</add>
 </template>
 <outputs>
