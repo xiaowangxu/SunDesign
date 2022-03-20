@@ -1,4 +1,5 @@
 <refs>
+	<component id="sub" url="./Design/Top.sdml" />
 </refs>
 <inputs>
 	<float name="a" default="0.0" />
@@ -16,6 +17,7 @@
 	<add>
 		<slot name="nums" />
 		<slot name="nums2" />
+		<sub num1="2.0" num2="1.0" />
 	</add>
 </template>
 <outputs>

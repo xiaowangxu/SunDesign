@@ -2477,7 +2477,7 @@ function create_Component(class_name,
 	}
 	return `class ${class_name} extends ComponentBase {
 	constructor(i = {}, c, s) {
-		super({${default_inputs.join(', ')}, ...i}, [${bitmasks.join(', ')}]);
+		super({${default_inputs.join(', ')}${default_inputs.length === 0 ? '' : ', '}...i}, [${bitmasks.join(', ')}]);
 		this.r = null;${nodes_decl.map(s => `\n\t\t${s}`).join('')}${params_decl.map(s => `\n\t\t${s}`).join('')}
 		this.init(c, s);
 	}

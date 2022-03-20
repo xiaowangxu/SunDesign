@@ -42,7 +42,7 @@
 		console.time("updating")
 		for (let i = 0; i < 10000; i++) {
 			const ans = $$.update({ number2: Math.floor(i / 100) });
-			if (ans) console.log("updated!!!");
+			// if (ans) console.log("updated!!!");
 		}
 		console.timeEnd("updating")
 		console.log($$.r.n.float);
