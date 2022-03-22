@@ -20,31 +20,43 @@
 	import { Environment as env } from "./SunDesign.js";
 	import * as rt from "./SunDesignRuntime.js";
 
-	const ENV = new env();
+	const OPT = { for_diff: true, inline_contanst_exp: false };
+	const LOOP = 100000;
+
+	const ENV = new env(undefined, OPT);
 
 	console.time("compiling")
 	ENV.component("test", "./Design/Test.sdml");
 	console.log(ENV);
 	Promise.all(ENV.promises).then(() => {
-		console.log(ENV.caches);
-		// ENV.generate();
 		const code = ENV.generate();
 		const entry = ENV.get_ClassName("test");
-		console.log(code);
+		// console.log(code);
+		const copy = async (e) => {
+			await navigator.clipboard.writeText(code);
+			console.warn(">>> copied to clipboard");
+		}
+
+		setTimeout(copy, 3000);
+
+		console.log(OPT);
 		const func = new Function(`${code}\nconst $$ = new ${entry}();\nreturn $$;`);
 		const $$ = func();
-		console.log($$);
+		// console.log($$);
+		// console.log($$.r.n.float);
+		// $$.update({ number2: 3.0 });
+		// console.log($$.r.n.float);
+		// $$.update({ number2: 4.0 });
 		console.log($$.r.n.float);
-		$$.update({ number2: 3.0 });
-		console.log($$.r.n.float);
-		$$.update({ number2: 4.0 });
-		console.log($$.r.n.float);
+		const time = Date.now();
 		console.time("updating")
-		for (let i = 0; i < 1000; i++) {
-			const ans = $$.update({ number2: Math.floor(i / 100) });
-			// if (ans) console.log("updated!!!");
+		for (let i = 0; i < LOOP; i++) { // number2: Math.floor(i / 100), 
+			const ans = $$.update({ test: i % 200 === 0, number2: Math.floor(i / 100) });
+			// if (ans) console.log("updated!!!", $$.r.n.float);
 		}
 		console.timeEnd("updating")
+		const run_time = Date.now() - time;
+		console.log(`total run time: ${run_time}ms, avg run time: ${run_time / LOOP}ms`);
 		console.log($$.r.n.float);
 	}).finally(() => {
 		console.timeEnd("compiling");

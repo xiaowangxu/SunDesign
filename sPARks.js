@@ -2517,7 +2517,8 @@ export const SunLang = function () {
 	}, 'program')
 }
 
-export function typeCheck(a, b) {
+export function typeCheck(a, b, opt = {}) {
+	const { array_ignore_length = false } = opt;
 	if (a.value === "$any" || b.value === "$any") {
 		return true
 	}
@@ -2533,7 +2534,7 @@ export function typeCheck(a, b) {
 				return a.value === b.value
 		}
 		else if (a.datatype === 'arraytype') {
-			return typeCheck(a.value, b.value) && (a.count === null || a.count === b.count);
+			return typeCheck(a.value, b.value) && (array_ignore_length || (a.count === null || a.count === b.count));
 		}
 		else if (a.datatype === 'tupletype') {
 			if (a.list.length !== b.list.length) return false;

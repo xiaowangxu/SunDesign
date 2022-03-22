@@ -574,7 +574,12 @@ export const SunDesignExpressionPrelude = {
 					}
 				],
 				export: (type_1, type_2, type_3) => {
-					if (typeCheck(type_3, type_2)) {
+					if (typeCheck(type_3, type_2, { array_ignore_length: true })) {
+						if (type_2.datatype === 'arraytype' && type_3.count !== type_2.count) {
+							const type = cloneType(type_3)
+							type.count = null
+							return [type, "switch"]
+						}
 						return [cloneType(type_3), "switch"]
 					}
 					return [null, `switch(_, a, b) requires 'a' and 'b' have the same type`]
@@ -2814,6 +2819,11 @@ export const SunDesignCodeGenPassVisitor = {
 		const y = codegen.walk(val.y, opt);
 		const z = codegen.walk(val.z, opt);
 		return `(new ${opt.THREE}.Vector3(${x}, ${y}, ${z}))`
+	},
+	switch: (val, opt, codegen) => {
+		const [test, a, b] = val
+		return `(${test} ? ${a} : ${b})`
+		console.log(val, a, b)
 	}
 }
 

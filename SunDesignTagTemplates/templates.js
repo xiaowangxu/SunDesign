@@ -19,7 +19,8 @@ const BASE =
     ref(id) {
         console.log(id);
     }
-}`
+}
+`
 export {
     // TAG_Number
     BASE,
