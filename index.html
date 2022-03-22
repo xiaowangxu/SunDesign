@@ -40,7 +40,7 @@
 		$$.update({ number2: 4.0 });
 		console.log($$.r.n.float);
 		console.time("updating")
-		for (let i = 0; i < 10000; i++) {
+		for (let i = 0; i < 1000; i++) {
 			const ans = $$.update({ number2: Math.floor(i / 100) });
 			// if (ans) console.log("updated!!!");
 		}

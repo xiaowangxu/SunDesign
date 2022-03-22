@@ -10,10 +10,14 @@
 <template>
 	<!-- 6*num2 -->
 	<add id="add">
-		<for array="[1.0, 2.0, 3.0]" iter="num">
+		<for array="[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0]" iter="num">
 			<num n="num * number2" />
 		</for>
 	</add>
+	<slots>
+		<num n="100.0 * number2" />
+		<num n="200.0" />
+	</slots>
 </template>
 <outputs>
 	<float name="input0" value="#add.result - 1" />
