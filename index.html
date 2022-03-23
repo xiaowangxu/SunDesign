@@ -9,11 +9,14 @@
 </head>
 <style>
 	body {
-		color: #f8dedb;
+		/* background-color: #f8dedb; */
+		/* width: 100vw;
+		height: 100vh; */
 	}
 </style>
 
 <body>
+	<button id="copy">Copy code !!</button>
 
 </body>
 <script type="module">
@@ -25,6 +28,12 @@
 
 	const ENV = new env(undefined, OPT);
 
+	let _code = '';
+	document.getElementById("copy").addEventListener('click', async () => {
+		await navigator.clipboard.writeText(_code);
+		console.warn(">>> copied to clipboard");
+	})
+
 	console.time("compiling")
 	ENV.component("test", "./Design/Test.sdml");
 	console.log(ENV);
@@ -32,30 +41,34 @@
 		const code = ENV.generate();
 		const entry = ENV.get_ClassName("test");
 		// console.log(code);
-		const copy = async (e) => {
-			await navigator.clipboard.writeText(code);
-			console.warn(">>> copied to clipboard");
-		}
+		_code = code;
 
-		setTimeout(copy, 3000);
-
-		console.log(OPT);
+		console.log(Object.entries(OPT).map(([key, val]) => `${key.split('_').map(i => {
+			const [h, ...tail] = [...i];
+			return [h.toUpperCase(), ...tail].join('');
+		}).join('')}: ${val}`).join('\n'));
+		// console.log(code);
 		const func = new Function(`${code}\nconst $$ = new ${entry}();\nreturn $$;`);
 		const $$ = func();
-		// console.log($$);
+
+
 		// console.log($$.r.n.float);
-		// $$.update({ number2: 3.0 });
+		// $$.update({ test: false });
 		// console.log($$.r.n.float);
-		// $$.update({ number2: 4.0 });
-		console.log($$.r.n.float);
+		// $$.update({ test: true });
+		// console.log($$.r.n.float);
+
+
 		const time = Date.now();
 		console.time("updating")
+		let count = 0;
 		for (let i = 0; i < LOOP; i++) { // number2: Math.floor(i / 100), 
 			const ans = $$.update({ test: i % 200 === 0, number2: Math.floor(i / 100) });
-			// if (ans) console.log("updated!!!", $$.r.n.float);
+			if (ans) count++;
 		}
 		console.timeEnd("updating")
 		const run_time = Date.now() - time;
+		console.log(`total update count: ${count} / ${LOOP}`);
 		console.log(`total run time: ${run_time}ms, avg run time: ${run_time / LOOP}ms`);
 		console.log($$.r.n.float);
 	}).finally(() => {

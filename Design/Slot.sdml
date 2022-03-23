@@ -1,14 +1,17 @@
 <refs>
 </refs>
 <inputs>
+	<float name="a" default="0.0" />
+	<float name="b" default="5.0" />
 </inputs>
 <slots>
 	<default>
-		<float count="2" />
+		<float />
 	</default>
 </slots>
 <template>
 	<add>
+		<num n="a - b" />
 		<slot name="default" />
 	</add>
 </template>

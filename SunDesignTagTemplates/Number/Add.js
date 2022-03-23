@@ -22,6 +22,6 @@ export const TAG_Add_0 =
         return false;
     }
     dispose() {
-        console.log("dispose component_Add");
+        // console.log("dispose component_Add");
     }
 }`}
