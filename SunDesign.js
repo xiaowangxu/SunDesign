@@ -2018,6 +2018,11 @@ class SDML_If extends SDML_Compiler_Visitor {
 
 	// codegen
 	generate(parent_codegen) {
+		const { if_branch_cache } = parent_codegen.opt;
+		return if_branch_cache ? this.generate_Cache(parent_codegen) : this.generate_NoCache(parent_codegen);
+	}
+
+	generate_Cache(parent_codegen) {
 		let code_true = null;
 		let code_false = null;
 		if (this.true_scope) {
@@ -2035,7 +2040,148 @@ class SDML_If extends SDML_Compiler_Visitor {
 		const deps = this.scope_deps;
 		const bitmasks = new BitMask(['$test', ...deps]);
 		const [[t_layer, t_mask]] = bitmasks.get_Masks(['$test']);
-		const d_bitmask = bitmasks.get_Masks([...deps]);
+		// const d_bitmask = bitmasks.get_Masks([...deps]);
+
+		const true_bitmask = bitmasks.get_Masks([...(this.true_scope?.scope_deps ?? [])]);
+		const false_bitmask = bitmasks.get_Masks([...(this.false_scope?.scope_deps ?? [])]);
+
+		const if_code = create_Component(
+			// class_name
+			`component_If_${this.uid}`,
+			// default_inputs
+			['$test: false', ...parent_codegen.get_DefaultInputs([...deps])],
+			// bit masks
+			bitmasks.mask_count,
+			// nodes decl
+			['this.condition = null;'],
+			// params decl
+			['this.true_nodes = null;',
+				'this.false_nodes = null;'],
+			// init
+			['this.condition = this.i.$test;',
+				`this.r = {n: {${types.map(i => `${i}: []`).join(', ')}}, e: {}};`,
+				'if (this.condition) {',
+				...(this.true_scope ? [
+					`	const node = new closure_If_True_${this.uid}({${[...this.true_scope.scope_deps].map(i => `${i}: this.i.${i}`).join(', ')}}, {}, {});`,
+					'	this.true_nodes = node;', ...true_types.map(t => {
+						return `\tthis.r.n.${t}.push(...node.r.n.${t});`
+					})] : []),
+				'}',
+
+				...(this.false_scope ? [
+					'else {',
+					`	const node = new closure_If_False_${this.uid}({${[...this.false_scope.scope_deps].map(i => `${i}: this.i.${i}`).join(', ')}}, {}, {});`,
+					'	this.false_nodes = node;',
+					...false_types.map(t => {
+						return `\tthis.r.n.${t}.push(...node.r.n.${t});`
+					}),
+					'}'] : []),
+			].filter(i => i !== undefined),
+			// diff
+			[
+				`if (i.$test !== undefined && this.i.$test !== i.$test) {`,
+				`	this.i.$test = i.$test;`,
+				`	this.condition = i.$test;`,
+				`	this.b[${t_layer}] |= ${t_mask};`,
+				`}`, ...(
+					[...deps].map(d => {
+						const [[layer, mask]] = bitmasks.get_Masks([d]);
+						return [`if (i.${d} !== undefined && i.${d} !== this.i.${d}) {`,
+						`	this.i.${d} = i.${d};`,
+						`	this.b[${layer}] |= ${mask};`,
+							`}`];
+					})
+				).flat(1)],
+			undefined,
+			['if (this.true_nodes !== null) this.true_nodes.dispose();', 'if (this.false_nodes !== null) this.false_nodes.dispose();'],
+			undefined,
+			[`if (this.b[${t_layer}] & /* $test */ ${t_mask}) {`,
+			...types.map(t => {
+				return `	this.r.n.${t} = [];`
+			}),
+				`	if (this.condition) {`,
+			...(this.true_scope ? [
+				`		let $changed = false;`,
+				`		if (this.true_nodes !== null)`,
+				`			$changed = this.true_nodes.update({${[...this.true_scope.scope_deps].map(i => `${i}: this.i.${i}`).join(', ')}}, {}, {})`,
+				`		else {`,
+				`			this.true_nodes = new closure_If_True_${this.uid}({${[...this.true_scope.scope_deps].map(i => `${i}: this.i.${i}`).join(', ')}}, {}, {});`,
+				`			$changed = true;`,
+				`		}`,
+				...true_types.map(t => {
+					return `		this.r.n.${t}.push(...this.true_nodes.r.n.${t});`
+				})] : []),
+				`		return $changed;`,
+				`	}`,
+			...(this.false_scope ? [
+				`	else {`,
+				`		let $changed = false;`,
+				`		if (this.false_nodes !== null)`,
+				`			$changed = this.false_nodes.update({${[...this.false_scope.scope_deps].map(i => `${i}: this.i.${i}`).join(', ')}}, {}, {})`,
+				`		else {`,
+				`			this.false_nodes = new closure_If_False_${this.uid}({${[...this.false_scope.scope_deps].map(i => `${i}: this.i.${i}`).join(', ')}}, {}, {});`,
+				`			$changed = true;`,
+				`		}`,
+				...false_types.map(t => {
+					return `		this.r.n.${t}.push(...this.false_nodes.r.n.${t});`
+				}),
+				`		return $changed;`,
+				`	}`] : []),
+				`}`,
+
+			...(true_bitmask.length === 0 ? [] : [
+				`if (/* ${[...this.true_scope.scope_deps]} */ (${true_bitmask.map(([layer, mask]) => `this.b[${layer}] & ${mask}`).join(' || ')}) && this.condition) {`,
+				...types.map(t => {
+					return `	this.r.n.${t} = [];`
+				}),
+				`	const $changed = this.true_nodes.update({${[...this.true_scope.scope_deps].map(i => `${i}: this.i.${i}`).join(', ')}}, {}, {});`,
+				...true_types.map(t => {
+					return `	this.r.n.${t}.push(...this.true_nodes.r.n.${t});`
+				}),
+				`	return $changed;`,
+				`}`,
+			]),
+
+			...(false_bitmask.length === 0 ? [] : [
+				`if (/* ${[...this.false_scope.scope_deps]} */ (${false_bitmask.map(([layer, mask]) => `this.b[${layer}] & ${mask}`).join(' || ')}) && !this.condition) {`,
+				...types.map(t => {
+					return `	this.r.n.${t} = [];`
+				}),
+				`	const $changed = this.false_nodes.update({${[...this.false_scope.scope_deps].map(i => `${i}: this.i.${i}`).join(', ')}}, {}, {});`,
+				...false_types.map(t => {
+					return `	this.r.n.${t}.push(...this.false_nodes.r.n.${t});`
+				}),
+				`	return $changed;`,
+				`}`,
+			])
+			]
+		);
+		// console.log(if_code)
+		parent_codegen.env.add_Template(`component_If_${this.uid}`, if_code);
+	}
+
+	generate_NoCache(parent_codegen) {
+		let code_true = null;
+		let code_false = null;
+		if (this.true_scope) {
+			code_true = new SDML_Compile_CodeGen(parent_codegen.env, `closure_If_True_${this.uid}`, this.true_scope, parent_codegen.opt).generate();
+			parent_codegen.env.add_Template(`closure_If_True_${this.uid}`, code_true);
+		}
+		if (this.false_scope) {
+			code_false = new SDML_Compile_CodeGen(parent_codegen.env, `closure_If_False_${this.uid}`, this.false_scope, parent_codegen.opt).generate();
+			parent_codegen.env.add_Template(`closure_If_False_${this.uid}`, code_false);
+		}
+		const types = this.types.type_names;
+		const true_types = this.true_scope ? this.true_scope.types.type_names : [];
+		const false_types = this.false_scope ? this.false_scope.types.type_names : [];
+
+		const deps = this.scope_deps;
+		const bitmasks = new BitMask(['$test', ...deps]);
+		const [[t_layer, t_mask]] = bitmasks.get_Masks(['$test']);
+		// const d_bitmask = bitmasks.get_Masks([...deps]);
+
+		const true_bitmask = bitmasks.get_Masks([...(this.true_scope?.scope_deps ?? [])]);
+		const false_bitmask = bitmasks.get_Masks([...(this.false_scope?.scope_deps ?? [])]);
 
 		const if_code = create_Component(
 			// class_name
@@ -2053,7 +2199,7 @@ class SDML_If extends SDML_Compiler_Visitor {
 				`this.r = {n: {${types.map(i => `${i}: []`).join(', ')}}, e: {}};`,
 				'if (this.condition) {',
 				...(this.true_scope ? [
-					`	const node = new closure_If_True_${this.uid}({${[...this.true_scope.scope_deps].map(i => `${i}: this.i.${i}`).join(', ')}}, {}, {})`,
+					`	const node = new closure_If_True_${this.uid}({${[...this.true_scope.scope_deps].map(i => `${i}: this.i.${i}`).join(', ')}}, {}, {});`,
 					'	this.if_nodes = node;', ...true_types.map(t => {
 						return `\tthis.r.n.${t}.push(...node.r.n.${t});`
 					})] : []),
@@ -2061,7 +2207,7 @@ class SDML_If extends SDML_Compiler_Visitor {
 
 				...(this.false_scope ? [
 					'else {',
-					`	const node = new closure_If_False_${this.uid}({${[...this.false_scope.scope_deps].map(i => `${i}: this.i.${i}`).join(', ')}}, {}, {})`,
+					`	const node = new closure_If_False_${this.uid}({${[...this.false_scope.scope_deps].map(i => `${i}: this.i.${i}`).join(', ')}}, {}, {});`,
 					'	this.if_nodes = node;',
 					...false_types.map(t => {
 						return `\tthis.r.n.${t}.push(...node.r.n.${t});`
@@ -2093,7 +2239,7 @@ class SDML_If extends SDML_Compiler_Visitor {
 				`	if (this.if_nodes !== null) this.if_nodes.dispose();`,
 				`	if (this.condition) {`,
 			...(this.true_scope ? [
-				`		const node = new closure_If_True_${this.uid}({${[...this.true_scope.scope_deps].map(i => `${i}: this.i.${i}`).join(', ')}}, {}, {})`,
+				`		const node = new closure_If_True_${this.uid}({${[...this.true_scope.scope_deps].map(i => `${i}: this.i.${i}`).join(', ')}}, {}, {});`,
 				`		this.if_nodes = node;`,
 				...true_types.map(t => {
 					return `		this.r.n.${t}.push(...node.r.n.${t});`
@@ -2101,7 +2247,7 @@ class SDML_If extends SDML_Compiler_Visitor {
 
 				`	}`,
 			...(this.false_scope ? [`	else {`,
-				`		const node = new closure_If_False_${this.uid}({${[...this.false_scope.scope_deps].map(i => `${i}: this.i.${i}`).join(', ')}}, {}, {})`,
+				`		const node = new closure_If_False_${this.uid}({${[...this.false_scope.scope_deps].map(i => `${i}: this.i.${i}`).join(', ')}}, {}, {});`,
 				`		this.if_nodes = node;`,
 				...false_types.map(t => {
 					return `		this.r.n.${t}.push(...node.r.n.${t});`
@@ -2109,26 +2255,55 @@ class SDML_If extends SDML_Compiler_Visitor {
 				`	}`] : []),
 				`	return true;`,
 				`}`,
-			...(d_bitmask.length === 0 ? [] : [`if (/* ${[...deps]} */ ${d_bitmask.map(([layer, mask]) => `this.b[${layer}] & ${mask}`).join(' || ')}) {`,
-			...types.map(t => {
-				return `	this.r.n.${t} = [];`
-			}),
-				`	let $changed = false;`,
-				`	if (this.condition) {`,
-			...(this.true_scope ? [
-				`		$changed = this.if_nodes.update({${[...this.true_scope.scope_deps].map(i => `${i}: this.i.${i}`).join(', ')}}, {}, {}) || $changed;`,
-				...true_types.map(t => {
-					return `		this.r.n.${t}.push(...this.if_nodes.r.n.${t});`
-				})] : []),
-				`	}`,
-			...(this.false_scope ? [`	else {`,
-				`		$changed = this.if_nodes.update({${[...this.false_scope.scope_deps].map(i => `${i}: this.i.${i}`).join(', ')}}, {}, {}) || $changed;`,
-				...false_types.map(t => {
-					return `		this.r.n.${t}.push(...this.if_nodes.r.n.${t});`
+
+			...(true_bitmask.length === 0 ? [] : [
+				`if (/* ${[...this.true_scope.scope_deps]} */ (${true_bitmask.map(([layer, mask]) => `this.b[${layer}] & ${mask}`).join(' || ')}) && this.condition) {`,
+				...types.map(t => {
+					return `	this.r.n.${t} = [];`
 				}),
-				`	}`] : []),
+				`	const $changed = this.if_nodes.update({${[...this.true_scope.scope_deps].map(i => `${i}: this.i.${i}`).join(', ')}}, {}, {});`,
+				...true_types.map(t => {
+					return `	this.r.n.${t}.push(...this.if_nodes.r.n.${t});`
+				}),
 				`	return $changed;`,
-				`}`])]
+				`}`,
+			]),
+
+			...(false_bitmask.length === 0 ? [] : [
+				`if (/* ${[...this.false_scope.scope_deps]} */ (${false_bitmask.map(([layer, mask]) => `this.b[${layer}] & ${mask}`).join(' || ')}) && !this.condition) {`,
+				...types.map(t => {
+					return `	this.r.n.${t} = [];`
+				}),
+				`	const $changed = this.if_nodes.update({${[...this.false_scope.scope_deps].map(i => `${i}: this.i.${i}`).join(', ')}}, {}, {});`,
+				...false_types.map(t => {
+					return `	this.r.n.${t}.push(...this.if_nodes.r.n.${t});`
+				}),
+				`	return $changed;`,
+				`}`,
+			])
+
+
+				// ...(d_bitmask.length === 0 ? [] : [`if (/* ${[...deps]} */ ${d_bitmask.map(([layer, mask]) => `this.b[${layer}] & ${mask}`).join(' || ')}) {`,
+				// ...types.map(t => {
+				// 	return `	this.r.n.${t} = [];`
+				// }),
+				// 	`	let $changed = false;`,
+				// 	`	if (this.condition) {`,
+				// ...(this.true_scope ? [
+				// 	`		$changed = this.if_nodes.update({${[...this.true_scope.scope_deps].map(i => `${i}: this.i.${i}`).join(', ')}}, {}, {}) || $changed;`,
+				// 	...true_types.map(t => {
+				// 		return `		this.r.n.${t}.push(...this.if_nodes.r.n.${t});`
+				// 	})] : []),
+				// 	`	}`,
+				// ...(this.false_scope ? [`	else {`,
+				// 	`		$changed = this.if_nodes.update({${[...this.false_scope.scope_deps].map(i => `${i}: this.i.${i}`).join(', ')}}, {}, {}) || $changed;`,
+				// 	...false_types.map(t => {
+				// 		return `		this.r.n.${t}.push(...this.if_nodes.r.n.${t});`
+				// 	}),
+				// 	`	}`] : []),
+				// 	`	return $changed;`,
+				// 	`}`])
+			]
 		);
 		// console.log(if_code)
 		parent_codegen.env.add_Template(`component_If_${this.uid}`, if_code);
@@ -2649,7 +2824,7 @@ function create_Component(class_name,
 
 class SDML_Compile_CodeGen {
 	constructor(env, class_name, scope, opt) {
-		this.opt = { inline_contanst_exp: false, ...opt };
+		this.opt = { for_diff: true, if_branch_cache: false, inline_contanst_exp: false, ...opt };
 		this.env = env;
 		this.class_name = class_name;
 		this.scope = scope;

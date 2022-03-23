@@ -23,8 +23,8 @@
 	import { Environment as env } from "./SunDesign.js";
 	import * as rt from "./SunDesignRuntime.js";
 
-	const OPT = { for_diff: true, inline_contanst_exp: false };
-	const LOOP = 100000;
+	const OPT = { for_diff: true, if_branch_cache: true, inline_contanst_exp: false };
+	const LOOP = 1000000;
 
 	const ENV = new env(undefined, OPT);
 
