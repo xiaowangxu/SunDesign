@@ -22,7 +22,7 @@ margin: 0px; padding: 2px 10px 10px 10px;">
 			<button onclick="test()" style="font-family: consolas;">Run Code</button>
 		</div> -->
 		<div style="flex:1; position: relative;">
-			<pre style="position: absolute; top: 0; bottom: 0; left: 0; right: 0;background-color: #282C34; padding: 10px; margin: 0px; word-break: break-all; font-size: 12px; font-family: fira code; overflow-y: auto; color: #A7A7AA; box-sizing: border-box;"
+			<pre style="position: absolute; top: 0; bottom: 0; left: 0; right: 0;background-color: #282C34; padding: 10px; margin: 0px; word-break: break-all; font-size: 12px; font-family: fira code; overflow-y: auto; color: #A7A7AA; box-sizing: border-box;display: none; "
 				id="trans"></pre>
 			<textarea
 				style="color: transparent; caret-color: white; position: absolute; top: 0; bottom: 0; left: 0; right: 0; resize: none; width: 100%; background-color: transparent; font-family: fira code;padding: 10px; margin: 0px; word-break: break-all; font-size: 12px; font-family: fira code; overflow-y: auto;box-sizing: border-box; border: none; overflow: visible;"></textarea>
@@ -33,13 +33,13 @@ margin: 0px; padding: 2px 10px 10px 10px;">
 			id="console"></pre> -->
 	</div>
 	<div
-		style="overflow: hidden; height: 100%;  min-width: 5%; max-width: 80%; resize: horizontal;  font-family: consolas; display: flex;flex-direction: column; gap: 10px; box-sizing: border-box;">
+		style="overflow: hidden; height: 100%;  min-width: 5%; max-width: 80%; resize: horizontal;  font-family: consolas; display: flex;flex-direction: column; gap: 10px; box-sizing: border-box;display: none; ">
 		<h3 style="margin: 0px 12px; margin-top: 8px;font-family: consolas;">Parser</h3>
 		<pre style="flex:1;width:100%; background-color: rgb(0, 0, 0); padding: 10px; margin: 0px; word-break: break-all; font-size: 12px; color: white; font-family: consolas; overflow: auto; box-sizing: border-box;"
 			id="parser"></pre>
 	</div>
 	<div
-		style="overflow: hidden; height: 100%;min-width: 5%;flex: 1; max-width: 80%; resize: none;  font-family: consolas; display: flex;flex-direction: column; gap: 10px">
+		style="overflow: hidden; height: 100%;min-width: 5%;flex: 1; max-width: 80%; resize: none;  font-family: consolas; display: flex;flex-direction: column; gap: 10px; display: none; ">
 		<h3 style="margin: 0px 12px; margin-top: 8px;font-family: consolas;">JS</h3>
 		<pre style="flex:1;width:100%; background-color: rgb(0, 0, 0); padding: 10px; margin: 0px; word-break: break-all; font-size: 12px; color: white; font-family: consolas; overflow: auto; box-sizing: border-box;"
 			id="tokens"></pre>
@@ -171,16 +171,22 @@ margin: 0px; padding: 2px 10px 10px 10px;">
 					ans.push(`${len.slice(0, len.length - 2).map(() => " ").join('')}.\n` + s + `${starter}${err.type}\n${err.message.split('\n').map(i => `${starter}` + `${i}`).join('\n')}`);
 				})
 
-				document.getElementById('tokens').innerHTML = ans.join('\n\n')
-				document.getElementById('parser').innerHTML = JSON.stringify(astnew2, null, 2)
-				document.getElementById('trans').innerHTML = `${typeToString(astnew2.datatype)}`;
+				ans.forEach(i => {
+					console.log(i)
+				})
 
-				let walker3 = SunDesignExpressionCodeGenPass
-				console.time("CodeGen")
-				let [code, opt] = walker3.generate(astnew2);
-				console.timeEnd("CodeGen")
-				console.log("Result: \n" + code)
-				console.log(opt)
+				if (ans.length === 0) {
+					document.getElementById('tokens').innerHTML = ans.join('\n\n')
+					document.getElementById('parser').innerHTML = JSON.stringify(astnew2, null, 2)
+					document.getElementById('trans').innerHTML = `${typeToString(astnew2.datatype)}`;
+
+					let walker3 = SunDesignExpressionCodeGenPass
+					console.time("CodeGen")
+					let [code, opt] = walker3.generate(astnew2);
+					console.timeEnd("CodeGen")
+					console.log("Result: \n" + code)
+					console.log(opt)
+				}
 			}
 			console.timeEnd("Total")
 		}

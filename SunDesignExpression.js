@@ -1,5 +1,7 @@
 import { Language, Match, MatchTerm, MatchToken, Once_or_None, More_or_None, ChooseOne, LLkChooseOne, SourceScript, ScriptPosition, BaseError, Lexer, Walker, Token, typeToString, typeCheck, cloneType } from "./sPARks.js"
 
+import { Matrix4, Quaternion, Euler, Vector3 } from './lib/three/src/Three.js';
+
 export { SourceScript, typeCheck, typeToString }
 
 export class SunDesignExpressionLexer extends Lexer {
@@ -44,11 +46,11 @@ export class SunDesignExpressionLexer extends Lexer {
 			this.syntaxhighlightstr += this.tint(identifier, 'keyword');
 		}
 		else if (identifier === 'false') {
-			this.tokens.push(new Token('TK_BOOL', identifier, this.last_pos, position));
+			this.tokens.push(new Token('TK_BOOL', false, this.last_pos, position));
 			this.syntaxhighlightstr += this.tint(identifier, 'number');
 		}
 		else if (identifier === 'true') {
-			this.tokens.push(new Token('TK_BOOL', identifier, this.last_pos, position));
+			this.tokens.push(new Token('TK_BOOL', true, this.last_pos, position));
 			this.syntaxhighlightstr += this.tint(identifier, 'number');
 		}
 		else {
@@ -586,6 +588,21 @@ export const SunDesignExpressionPrelude = {
 				}
 			}
 		],
+		valid: [
+			{
+				inputs: [{
+					type: "datatype",
+					datatype: "base",
+					value: "$any"
+				}
+				],
+				export: [{
+					type: 'datatype',
+					datatype: 'base',
+					value: 'bool'
+				}, "valid"]
+			}
+		],
 		int: [{
 			inputs: [{
 				type: 'datatype',
@@ -964,7 +981,8 @@ export const SunDesignExpressionPrelude = {
 					datatype: "base",
 					value: "float"
 				}, "multVec2Vec2"]
-			}, {
+			},
+			{
 				inputs: [
 					{
 						type: "datatype",
@@ -981,6 +999,24 @@ export const SunDesignExpressionPrelude = {
 					datatype: "base",
 					value: "vec3"
 				}, "multVec3Vec3"]
+			},
+			{
+				inputs: [
+					{
+						type: "datatype",
+						datatype: "base",
+						value: "quat"
+					}, {
+						type: "datatype",
+						datatype: "base",
+						value: "quat"
+					}
+				],
+				export: [{
+					type: "datatype",
+					datatype: "base",
+					value: "quat"
+				}, "multQuatQuat"]
 			},
 		],
 		"/": [
@@ -1347,6 +1383,193 @@ export const SunDesignExpressionPrelude = {
 				value: "bool"
 			}, "$keep"]
 		}],
+		//
+		'==': [
+			{
+				inputs: [
+					{
+						type: "datatype",
+						datatype: "base",
+						value: "$number"
+					}, {
+						type: "datatype",
+						datatype: "base",
+						value: "$number"
+					}
+				],
+				export: (type_1, type_2) => {
+					return [{
+						type: "datatype",
+						datatype: "base",
+						value: "bool"
+					}, "$keep"]
+				}
+			},
+			{
+				inputs: [
+					{
+						type: "datatype",
+						datatype: "base",
+						value: "string"
+					}, {
+						type: "datatype",
+						datatype: "base",
+						value: "string"
+					}
+				],
+				export: (type_1, type_2) => {
+					return [{
+						type: "datatype",
+						datatype: "base",
+						value: "bool"
+					}, "$keep"]
+				}
+			},
+			{
+				inputs: [
+					{
+						type: "datatype",
+						datatype: "base",
+						value: "bool"
+					}, {
+						type: "datatype",
+						datatype: "base",
+						value: "bool"
+					}
+				],
+				export: (type_1, type_2) => {
+					return [{
+						type: "datatype",
+						datatype: "base",
+						value: "bool"
+					}, "$keep"]
+				}
+			}
+		],
+		'!=': [
+			{
+				inputs: [
+					{
+						type: "datatype",
+						datatype: "base",
+						value: "$number"
+					}, {
+						type: "datatype",
+						datatype: "base",
+						value: "$number"
+					}
+				],
+				export: (type_1, type_2) => {
+					return [{
+						type: "datatype",
+						datatype: "base",
+						value: "bool"
+					}, "$keep"]
+				}
+			},
+			{
+				inputs: [
+					{
+						type: "datatype",
+						datatype: "base",
+						value: "string"
+					}, {
+						type: "datatype",
+						datatype: "base",
+						value: "string"
+					}
+				],
+				export: (type_1, type_2) => {
+					return [{
+						type: "datatype",
+						datatype: "base",
+						value: "bool"
+					}, "$keep"]
+				}
+			},
+			{
+				inputs: [
+					{
+						type: "datatype",
+						datatype: "base",
+						value: "bool"
+					}, {
+						type: "datatype",
+						datatype: "base",
+						value: "bool"
+					}
+				],
+				export: (type_1, type_2) => {
+					return [{
+						type: "datatype",
+						datatype: "base",
+						value: "bool"
+					}, "$keep"]
+				}
+			}
+		],
+		'>': [
+			{
+				inputs: [
+					{
+						type: "datatype",
+						datatype: "base",
+						value: "$number"
+					}, {
+						type: "datatype",
+						datatype: "base",
+						value: "$number"
+					}
+				],
+				export: (type_1, type_2) => {
+					return [{
+						type: "datatype",
+						datatype: "base",
+						value: "bool"
+					}, "$keep"]
+				}
+			},
+			{
+				inputs: [
+					{
+						type: "datatype",
+						datatype: "base",
+						value: "string"
+					}, {
+						type: "datatype",
+						datatype: "base",
+						value: "string"
+					}
+				],
+				export: (type_1, type_2) => {
+					return [{
+						type: "datatype",
+						datatype: "base",
+						value: "bool"
+					}, "$keep"]
+				}
+			},
+			{
+				inputs: [
+					{
+						type: "datatype",
+						datatype: "base",
+						value: "bool"
+					}, {
+						type: "datatype",
+						datatype: "base",
+						value: "bool"
+					}
+				],
+				export: (type_1, type_2) => {
+					return [{
+						type: "datatype",
+						datatype: "base",
+						value: "bool"
+					}, "$keep"]
+				}
+			}
+		],
 		'>=': [
 			{
 				inputs: [
@@ -1367,8 +1590,173 @@ export const SunDesignExpressionPrelude = {
 						value: "bool"
 					}, "$keep"]
 				}
+			},
+			{
+				inputs: [
+					{
+						type: "datatype",
+						datatype: "base",
+						value: "string"
+					}, {
+						type: "datatype",
+						datatype: "base",
+						value: "string"
+					}
+				],
+				export: (type_1, type_2) => {
+					return [{
+						type: "datatype",
+						datatype: "base",
+						value: "bool"
+					}, "$keep"]
+				}
+			},
+			{
+				inputs: [
+					{
+						type: "datatype",
+						datatype: "base",
+						value: "bool"
+					}, {
+						type: "datatype",
+						datatype: "base",
+						value: "bool"
+					}
+				],
+				export: (type_1, type_2) => {
+					return [{
+						type: "datatype",
+						datatype: "base",
+						value: "bool"
+					}, "$keep"]
+				}
 			}
 		],
+		'<': [
+			{
+				inputs: [
+					{
+						type: "datatype",
+						datatype: "base",
+						value: "$number"
+					}, {
+						type: "datatype",
+						datatype: "base",
+						value: "$number"
+					}
+				],
+				export: (type_1, type_2) => {
+					return [{
+						type: "datatype",
+						datatype: "base",
+						value: "bool"
+					}, "$keep"]
+				}
+			},
+			{
+				inputs: [
+					{
+						type: "datatype",
+						datatype: "base",
+						value: "string"
+					}, {
+						type: "datatype",
+						datatype: "base",
+						value: "string"
+					}
+				],
+				export: (type_1, type_2) => {
+					return [{
+						type: "datatype",
+						datatype: "base",
+						value: "bool"
+					}, "$keep"]
+				}
+			},
+			{
+				inputs: [
+					{
+						type: "datatype",
+						datatype: "base",
+						value: "bool"
+					}, {
+						type: "datatype",
+						datatype: "base",
+						value: "bool"
+					}
+				],
+				export: (type_1, type_2) => {
+					return [{
+						type: "datatype",
+						datatype: "base",
+						value: "bool"
+					}, "$keep"]
+				}
+			}
+		],
+		'<=': [
+			{
+				inputs: [
+					{
+						type: "datatype",
+						datatype: "base",
+						value: "$number"
+					}, {
+						type: "datatype",
+						datatype: "base",
+						value: "$number"
+					}
+				],
+				export: (type_1, type_2) => {
+					return [{
+						type: "datatype",
+						datatype: "base",
+						value: "bool"
+					}, "$keep"]
+				}
+			},
+			{
+				inputs: [
+					{
+						type: "datatype",
+						datatype: "base",
+						value: "string"
+					}, {
+						type: "datatype",
+						datatype: "base",
+						value: "string"
+					}
+				],
+				export: (type_1, type_2) => {
+					return [{
+						type: "datatype",
+						datatype: "base",
+						value: "bool"
+					}, "$keep"]
+				}
+			},
+			{
+				inputs: [
+					{
+						type: "datatype",
+						datatype: "base",
+						value: "bool"
+					}, {
+						type: "datatype",
+						datatype: "base",
+						value: "bool"
+					}
+				],
+				export: (type_1, type_2) => {
+					return [{
+						type: "datatype",
+						datatype: "base",
+						value: "bool"
+					}, "$keep"]
+				}
+			}
+		],
+		//
 		"vec2": [
 			{
 				inputs: [{
@@ -1439,13 +1827,24 @@ export const SunDesignExpressionPrelude = {
 					type: "datatype",
 					datatype: "base",
 					value: "$number"
+				}, {
+					type: "datatype",
+					datatype: "base",
+					value: "$number"
+				}, {
+					type: "datatype",
+					datatype: "base",
+					value: "$number"
 				}],
 				export: [{
 					type: "datatype",
 					datatype: "base",
 					value: "euler"
-				}, 'makeEuler_0']
-			},
+				}, "makeEuler"]
+			}
+		],
+		// Quaternion
+		"quat": [
 			{
 				inputs: [{
 					type: "datatype",
@@ -1459,12 +1858,16 @@ export const SunDesignExpressionPrelude = {
 					type: "datatype",
 					datatype: "base",
 					value: "$number"
+				}, {
+					type: "datatype",
+					datatype: "base",
+					value: "$number"
 				}],
 				export: [{
 					type: "datatype",
 					datatype: "base",
-					value: "euler"
-				}, "makeEuler3"]
+					value: "quat"
+				}, "makeQuat"]
 			}
 		],
 		"mat4": [
@@ -1547,6 +1950,26 @@ export const SunDesignExpressionPrelude = {
 					datatype: "base",
 					value: "mat4"
 				}, 'makeMat4']
+			},
+			{
+				inputs: [{
+					type: "datatype",
+					datatype: "base",
+					value: "vec3"
+				}, {
+					type: "datatype",
+					datatype: "base",
+					value: "quat"
+				}, {
+					type: "datatype",
+					datatype: "base",
+					value: "vec3"
+				}],
+				export: [{
+					type: "datatype",
+					datatype: "base",
+					value: "mat4"
+				}, 'makeMat4PosQuatScale']
 			}
 		],
 		"basis": [
@@ -1795,7 +2218,12 @@ export const SunDesignExpressionPrelude = {
 				type: "datatype",
 				datatype: "base",
 				value: "float"
-			}, "getEulerZ"]
+			}, "getEulerZ"],
+			quat: [{
+				type: "datatype",
+				datatype: "base",
+				value: "quat"
+			}, "getEulerQuat"]
 		},
 		mat4: {
 			translate: [{
@@ -1806,7 +2234,7 @@ export const SunDesignExpressionPrelude = {
 			rotate: [{
 				type: "datatype",
 				datatype: "base",
-				value: "euler"
+				value: "quat"
 			}, "getMat4Rotate"],
 			scale: [{
 				type: "datatype",
@@ -1818,6 +2246,18 @@ export const SunDesignExpressionPrelude = {
 				datatype: "base",
 				value: "mat4"
 			}, "getMat4Invert"],
+		},
+		quat: {
+			inverse: [{
+				type: "datatype",
+				datatype: "base",
+				value: "quat"
+			}, "getQuatInvert"],
+			euler: [{
+				type: "datatype",
+				datatype: "base",
+				value: "euler"
+			}, "getQuatEuler"],
 		}
 	}
 }
@@ -2247,6 +2687,13 @@ const SunDesignExpressionOptimizations = {
 		"^": (left, right) => { return left ** right },
 		"&&": (left, right) => { return left && right },
 		"||": (left, right) => { return left || right },
+
+		"==": (left, right) => { return left === right },
+		"!=": (left, right) => { return left !== right },
+		">": (left, right) => { return left > right },
+		">=": (left, right) => { return left >= right },
+		"<": (left, right) => { return left < right },
+		"<=": (left, right) => { return left <= right },
 	},
 	UNIOP: {
 		"+": (left) => { return left },
@@ -2255,6 +2702,7 @@ const SunDesignExpressionOptimizations = {
 	},
 	FUNCS: {
 		cast_int: (arg1) => Math.floor(arg1.value),
+		valid: (arg1) => (arg1 !== undefined),
 		// vec2
 		addVec2: (arg1, arg2) => {
 			return OptVector2.add(arg1.value, arg2.value)
@@ -2281,6 +2729,11 @@ const SunDesignExpressionOptimizations = {
 		multVec3Vec3: (arg1, arg2) => {
 			return OptVector2.cross(arg1.value, arg2.value)
 		},
+
+		// quat
+		multQuatQuat: (quat1, quat2) => {
+			return OptQuaternion.multiply(quat1.value, quat2.value)
+		},
 	},
 	NOTCONSTANTFUNCS: {
 		"*": ([const1, const2], [arg1, arg2]) => {
@@ -2298,6 +2751,18 @@ const SunDesignExpressionOptimizations = {
 		},
 		"/": ([const1, const2], [arg1, arg2]) => {
 			if (const2 && arg2.value === 1) return arg1
+		},
+		"&&": ([const1, const2], [arg1, arg2]) => {
+			if (const1 && !arg1.value) return create_Node.value(false, 'bool')
+			if (const1 && arg1.value) return arg2
+			if (const2 && !arg2.value) return create_Node.value(false, 'bool')
+			if (const2 && arg2.value) return arg1
+		},
+		"||": ([const1, const2], [arg1, arg2]) => {
+			if (const1 && arg1.value) return create_Node.value(true, 'bool')
+			if (const1 && !arg1.value) return arg2
+			if (const2 && arg2.value) return create_Node.value(true, 'bool')
+			if (const2 && !arg2.value) return arg1
 		},
 		switch: (constants, args) => {
 			const [test_const, _1, _2] = constants
@@ -2424,6 +2889,59 @@ const SunDesignExpressionOptimizations = {
 				return vec
 			}
 		},
+		// euler
+		makeEuler: ([const1, const2, const3], [arg1, arg2, arg3]) => {
+			const euler = new OptEuler(
+				clone_Node(arg1),
+				clone_Node(arg2),
+				clone_Node(arg3),
+			)
+			return create_Node.value(
+				euler,
+				'euler',
+				euler.constant
+			)
+		},
+		// quat
+		makeQuat: ([const1, const2, const3, const4], [arg1, arg2, arg3, arg4]) => {
+			const quat = new OptQuaternion(
+				clone_Node(arg1),
+				clone_Node(arg2),
+				clone_Node(arg3),
+				clone_Node(arg4),
+			)
+			return create_Node.value(
+				quat,
+				'quat',
+				quat.constant
+			)
+		},
+		// mat4
+		makeMat4: (constarr, [n11, n12, n13, n14, n21, n22, n23, n24, n31, n32, n33, n34, n41, n42, n43, n44]) => {
+			const mat4 = new OptMatrix4(
+				clone_Node(n11),
+				clone_Node(n12),
+				clone_Node(n13),
+				clone_Node(n14),
+				clone_Node(n21),
+				clone_Node(n22),
+				clone_Node(n23),
+				clone_Node(n24),
+				clone_Node(n31),
+				clone_Node(n32),
+				clone_Node(n33),
+				clone_Node(n34),
+				clone_Node(n41),
+				clone_Node(n42),
+				clone_Node(n43),
+				clone_Node(n44),
+			)
+			return create_Node.value(
+				mat4,
+				'mat4',
+				mat4.constant
+			)
+		},
 		// array
 		array_take: ([const1, const2], [arr, idx]) => {
 			if (const2 && (arr.datatype.count !== null && arr.datatype.count !== undefined)) {
@@ -2485,6 +3003,36 @@ const SunDesignExpressionOptimizations = {
 					const ans = args.value.length()
 					return create_Node.value(ans, 'float')
 				}
+			}
+		},
+		// euler
+		getEulerX: (constant, args) => {
+			return args.value.getX()
+		},
+		getEulerY: (constant, args) => {
+			return args.value.getY()
+		},
+		getEulerZ: (constant, args) => {
+			return args.value.getZ()
+		},
+		// euler
+		getEulerQuat: (constant, euler) => {
+			if (constant) {
+				const quat = OptEuler.toQuaternion(euler.value)
+				return create_Node.value(quat, 'quat')
+			}
+		},
+		// quat
+		getQuatInvert: (constant, args) => {
+			if (constant) {
+				const invert = OptQuaternion.invert(args.value)
+				return create_Node.value(invert, 'quat')
+			}
+		},
+		getQuatEuler: (constant, quat) => {
+			if (constant) {
+				const euler = OptQuaternion.toEuler(quat.value)
+				return create_Node.value(euler, 'euler')
 			}
 		},
 	}
@@ -2639,7 +3187,7 @@ export const SunDesignOptimizationPassVisitor = {
 				return node
 			}
 			catch (err) {
-				console.log(err);
+				console.error(err)
 				err.set_Portion(path.$start, path.$end)
 				return [path.node, err]
 			}
@@ -2757,6 +3305,19 @@ class OptVector3 {
 		return this.z
 	}
 
+	toTHREEVector3() {
+		if (this.constant) {
+			const x = this.x.value
+			const y = this.y.value
+			const z = this.z.value
+			return new Vector3(x, y, z)
+		}
+	}
+
+	static toOptVector3(vec3) {
+		return new OptVector3(create_Node.value(vec3.x, 'float'), create_Node.value(vec3.y, 'float'), create_Node.value(vec3.z, 'float'))
+	}
+
 	static add(a, b) {
 		if (a.constant && b.constant) {
 			return new OptVector3(create_Node.value(a.x.value + b.x.value, 'float'), create_Node.value(a.y.value + b.y.value, 'float'), create_Node.value(a.z.value + b.z.value, 'float'))
@@ -2785,6 +3346,213 @@ class OptVector3 {
 	}
 }
 
+class OptEuler {
+	constructor(x, y, z) {
+		this.x = x
+		this.y = y
+		this.z = z
+		this.constant = x.constant && y.constant && z.constant ? true : false
+	}
+
+	multScaler(s) {
+		if (!this.constant) return
+		this.x.value *= s
+		this.y.value *= s
+		this.z.value *= s
+	}
+
+	getX() {
+		return this.x
+	}
+
+	getY() {
+		return this.y
+	}
+
+	getZ() {
+		return this.z
+	}
+
+	toTHREEEuler() {
+		if (this.constant) {
+			const x = this.x.value
+			const y = this.y.value
+			const z = this.z.value
+			return new Euler(x, y, z)
+		}
+	}
+
+	static toOptEuler(euler) {
+		return new OptEuler(create_Node.value(euler.x, 'float'), create_Node.value(euler.y, 'float'), create_Node.value(euler.z, 'float'))
+	}
+
+	static add(a, b) {
+		if (a.constant && b.constant) {
+			return new OptVector3(create_Node.value(a.x.value + b.x.value, 'float'), create_Node.value(a.y.value + b.y.value, 'float'), create_Node.value(a.z.value + b.z.value, 'float'))
+		}
+	}
+
+	static toQuaternion(a) {
+		if (a.constant) {
+			const x = a.x.value
+			const y = a.y.value
+			const z = a.z.value
+			const euler = new Euler(x, y, z)
+			const quat = new Quaternion().setFromEuler(euler)
+			return new OptQuaternion(create_Node.value(quat.x, 'float'), create_Node.value(quat.y, 'float'), create_Node.value(quat.z, 'float'), create_Node.value(quat.w, 'float'))
+		}
+	}
+}
+
+class OptQuaternion {
+	constructor(x, y, z, w) {
+		this.x = x
+		this.y = y
+		this.z = z
+		this.w = w
+		this.constant = x.constant && y.constant && z.constant && w.constant ? true : false
+	}
+
+	multScaler(s) {
+		if (!this.constant) return
+		this.x.value *= s
+		this.y.value *= s
+		this.z.value *= s
+	}
+
+	getX() {
+		return this.x
+	}
+
+	getY() {
+		return this.y
+	}
+
+	getZ() {
+		return this.z
+	}
+
+	toTHREEQuaternion() {
+		if (this.constant) {
+			const x = this.x.value
+			const y = this.y.value
+			const z = this.z.value
+			const w = this.w.value
+			return new Quaternion(x, y, z, w)
+		}
+	}
+
+	static toOptQuaternion(quat) {
+		return new OptEuler(create_Node.value(quat.x, 'float'), create_Node.value(quat.y, 'float'), create_Node.value(quat.z, 'float'), create_Node.value(quat.w, 'float'))
+	}
+
+	static invert(a) {
+		if (a.constant) {
+			const x = a.x.value
+			const y = a.y.value
+			const z = a.z.value
+			const w = a.w.value
+			const quat = new Quaternion(x, y, z, w).invert()
+			return new OptQuaternion(create_Node.value(quat.x, 'float'), create_Node.value(quat.y, 'float'), create_Node.value(quat.z, 'float'), create_Node.value(quat.w, 'float'))
+		}
+	}
+
+	static multiply(a, b) {
+		if (a.constant && b.constant) {
+			const x1 = a.x.value
+			const y1 = a.y.value
+			const z1 = a.z.value
+			const w1 = a.w.value
+			const x2 = b.x.value
+			const y2 = b.y.value
+			const z2 = b.z.value
+			const w2 = b.w.value
+			const quat1 = new Quaternion(x1, y1, z1, w1)
+			const quat2 = new Quaternion(x2, y2, z2, w2)
+			const quat = new Quaternion().multiplyQuaternions(quat1, quat2)
+			return new OptQuaternion(create_Node.value(quat.x, 'float'), create_Node.value(quat.y, 'float'), create_Node.value(quat.z, 'float'), create_Node.value(quat.w, 'float'))
+		}
+	}
+
+	static toEuler(a) {
+		if (a.constant) {
+			const x = a.x.value
+			const y = a.y.value
+			const z = a.z.value
+			const w = a.w.value
+			const quat = new Quaternion(x, y, z, w)
+			const euler = new Euler().setFromQuaternion(quat)
+			return new OptEuler(create_Node.value(euler.x, 'float'), create_Node.value(euler.y, 'float'), create_Node.value(euler.z, 'float'))
+		}
+	}
+}
+
+class OptMatrix4 {
+	constructor(n11, n12, n13, n14, n21, n22, n23, n24, n31, n32, n33, n34, n41, n42, n43, n44) {
+		this.n11 = n11
+		this.n12 = n12
+		this.n13 = n13
+		this.n14 = n14
+		this.n21 = n21
+		this.n22 = n22
+		this.n23 = n23
+		this.n24 = n24
+		this.n31 = n31
+		this.n32 = n32
+		this.n33 = n33
+		this.n34 = n34
+		this.n41 = n41
+		this.n42 = n42
+		this.n43 = n43
+		this.n44 = n44
+		this.constant = n11.constant && n12.constant && n13.constant && n14.constant && n21.constant && n22.constant && n23.constant && n24.constant && n31.constant && n32.constant && n33.constant && n34.constant && n41.constant && n42.constant && n43.constant && n44.constant ? true : false
+	}
+
+	toTHREEMatrix4() {
+		if (this.constant) {
+			const n11 = n11.value
+			const n12 = n12.value
+			const n13 = n13.value
+			const n14 = n14.value
+			const n21 = n21.value
+			const n22 = n22.value
+			const n23 = n23.value
+			const n24 = n24.value
+			const n31 = n31.value
+			const n32 = n32.value
+			const n33 = n33.value
+			const n34 = n34.value
+			const n41 = n41.value
+			const n42 = n42.value
+			const n43 = n43.value
+			const n44 = n44.value
+			const mat4 = new Matrix4()
+			mat4.set(n11, n12, n13, n14, n21, n22, n23, n24, n31, n32, n33, n34, n41, n42, n43, n44)
+			return mat4;
+		}
+	}
+
+	static toOptMatrix4(mat4) {
+		const t = mat4.clone().transpose()
+		const array = []
+		t.toArray(array)
+		return new OptMatrix4(...array.map(
+			val =>
+				create_Node.value(val, 'float')
+		))
+	}
+
+	// Warning !!!! ==> b * a
+	static multiply(a, b) {
+		if (a.constant && b.constant) {
+			const mata = a.toTHREEMatrix4()
+			const matb = b.toTHREEMatrix4()
+			const mat = new Matrix4().multiplyMatrices(matb, mata)
+			return OptMatrix4.toOptMatrix4(mat)
+		}
+	}
+}
+
 class OptimizationPass {
 	constructor() {
 		this.walker = new Walker(null, SunDesignOptimizationPassVisitor, null, null, true)
@@ -2801,6 +3569,7 @@ class OptimizationPass {
 export const SunDesignExpressionOptimizationPass = new OptimizationPass()
 
 export const SunDesignCodeGenPassVisitor = {
+	valid: (val) => `(${val} !== undefined)`,
 	int: (val) => val.toString(),
 	bool: (val) => val.toString(),
 	float: (val) => val.toString(),
@@ -2808,7 +3577,15 @@ export const SunDesignCodeGenPassVisitor = {
 	'+': (a, b) => `(${a} + ${b})`,
 	'-': (a, b) => `(${a} - ${b})`,
 	'*': (a, b) => `(${a} * ${b})`,
+	'&&': (a, b) => `(${a} && ${b})`,
+	'||': (a, b) => `(${a} && ${b})`,
+	'!': (a) => `(!${a})`,
+	'==': (a, b) => `(${a} === ${b})`,
+	'!=': (a, b) => `(${a} !== ${b})`,
+	'>': (a, b) => `(${a} > ${b})`,
 	'>=': (a, b) => `(${a} >= ${b})`,
+	'<': (a, b) => `(${a} < ${b})`,
+	'<=': (a, b) => `(${a} <= ${b})`,
 	vec2: (val, opt, codegen) => {
 		const x = codegen.walk(val.x, opt);
 		const y = codegen.walk(val.y, opt);
@@ -2820,11 +3597,50 @@ export const SunDesignCodeGenPassVisitor = {
 		const z = codegen.walk(val.z, opt);
 		return `(new ${opt.THREE}.Vector3(${x}, ${y}, ${z}))`
 	},
+	euler: (val, opt, codegen) => {
+		const x = codegen.walk(val.x, opt);
+		const y = codegen.walk(val.y, opt);
+		const z = codegen.walk(val.z, opt);
+		return `(new ${opt.THREE}.Euler(${x}, ${y}, ${z}))`
+	},
+	quat: (val, opt, codegen) => {
+		const x = codegen.walk(val.x, opt);
+		const y = codegen.walk(val.y, opt);
+		const z = codegen.walk(val.z, opt);
+		const w = codegen.walk(val.w, opt);
+		return `(new ${opt.THREE}.Quaternion(${x}, ${y}, ${z}, ${w}))`
+	},
+	mat4: (val, opt, codegen) => {
+		const n11 = codegen.walk(val.n11, opt);
+		const n12 = codegen.walk(val.n12, opt);
+		const n13 = codegen.walk(val.n13, opt);
+		const n14 = codegen.walk(val.n14, opt);
+		const n21 = codegen.walk(val.n21, opt);
+		const n22 = codegen.walk(val.n22, opt);
+		const n23 = codegen.walk(val.n23, opt);
+		const n24 = codegen.walk(val.n24, opt);
+		const n31 = codegen.walk(val.n31, opt);
+		const n32 = codegen.walk(val.n32, opt);
+		const n33 = codegen.walk(val.n33, opt);
+		const n34 = codegen.walk(val.n34, opt);
+		const n41 = codegen.walk(val.n41, opt);
+		const n42 = codegen.walk(val.n42, opt);
+		const n43 = codegen.walk(val.n43, opt);
+		const n44 = codegen.walk(val.n44, opt);
+		return `(new ${opt.THREE}.Matrix4().set(${n11}, ${n12}, ${n13}, ${n14}, ${n21}, ${n22}, ${n23}, ${n24}, ${n31}, ${n32}, ${n33}, ${n34}, ${n41}, ${n42}, ${n43}, ${n44}))`
+	},
+	makeMat4Identity: (val, opt, codegen) => {
+		return `(new ${opt.THREE}.Matrix4())`
+	},
 	switch: (val, opt, codegen) => {
 		const [test, a, b] = val
 		return `(${test} ? ${a} : ${b})`
 		console.log(val, a, b)
-	}
+	},
+	array_take: (val, opt, codegen) => {
+		return `${val[0]}[${val[1]}]`
+	},
+
 }
 
 class CodeGenPass {
@@ -2839,17 +3655,11 @@ class CodeGenPass {
 		return `[${list.join(', ')}]`;
 	}
 
-	vec2(val, opt) {
-		const x = this.walk(val.x, opt);
-		const y = this.walk(val.y, opt);
-		return `new THREE.Vector2(${x}, ${y})`;
-	}
-
 	value(ast, opt) {
 		if (SunDesignCodeGenPassVisitor[ast.datatype.value])
 			return SunDesignCodeGenPassVisitor[ast.datatype.value](ast.value, opt, this);
 		else
-			return this[ast.datatype.value](ast.value, opt);
+			return this[ast.datatype.value](ast.value, opt, this);
 	}
 
 	noderef(ast, opt) {
@@ -2859,13 +3669,18 @@ class CodeGenPass {
 
 	func(ast, opt) {
 		if (SunDesignCodeGenPassVisitor[ast.func])
-			return SunDesignCodeGenPassVisitor[ast.func](ast.arguments.map(a => this.walk(a, opt)));
+			return SunDesignCodeGenPassVisitor[ast.func](ast.arguments.map(a => this.walk(a, opt)), opt, this);
 		else
 			return `${ast.func}(${ast.arguments.map(a => this.walk(a, opt)).join(', ')})`;
 	}
 
 	dot(ast, opt) {
 		return `${ast.func}(${this.walk(ast.sub[0], opt)})`;
+	}
+
+	uniop(ast, opt) {
+		const a = this.walk(ast.sub[0], opt);
+		return SunDesignCodeGenPassVisitor[ast.value](a);
 	}
 
 	binop(ast, opt) {
@@ -2884,7 +3699,7 @@ class CodeGenPass {
 	}
 
 	generate(ast, opt = {}) {
-		opt = { constant: false, deps: new Set(), ids: new Set(), datatype: { type: 'datatype', datatype: 'base', value: 'unknown' }, THREE: 'ENV.THREE', FUNCS: 'ENV.FUNCS', INPUTS: 'INPUTS', NODEMAP: {}, ...opt };
+		opt = { warnings: [], constant: false, deps: new Set(), ids: new Set(), datatype: { type: 'datatype', datatype: 'base', value: 'unknown' }, THREE: 'THREE', FUNCS: 'FUNCS', INPUTS: 'INPUTS', NODEMAP: {}, ...opt };
 		opt.constant = ast.constant ? true : false;
 		opt.datatype = ast.datatype ?? opt.datatype;
 		opt.ast = ast;
