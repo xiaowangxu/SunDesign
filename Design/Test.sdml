@@ -19,16 +19,16 @@
 				<num n="1.0" />
 			</for>
 		</for> -->
-		<!-- <if test="test">
+		<if test="test">
 			<num n="number1" />
-		<else>
-			<num n="number2" />
-		</else>
-		</if> -->
+			<else>
+				<num n="number2" />
+			</else>
+		</if>
 
 		<!-- 5, 1 -->
 		<!-- add - (30+5+5+5, 30+1+1+1) - 78 -->
-		<for array="[number1, number2]" iter="num">
+		<!-- <for array="[number1, number2]" iter="num">
 			<if test="test">
 				<num n="num" />
 				<else>
@@ -40,7 +40,7 @@
 					</for>
 				</else>
 			</if>
-		</for>
+		</for> -->
 	</add>
 </template>
 <outputs>

@@ -2101,31 +2101,25 @@ class SDML_If extends SDML_Compiler_Visitor {
 			}),
 				`	if (this.condition) {`,
 			...(this.true_scope ? [
-				`		let $changed = false;`,
 				`		if (this.true_nodes !== null)`,
-				`			$changed = this.true_nodes.update({${[...this.true_scope.scope_deps].map(i => `${i}: this.i.${i}`).join(', ')}}, {}, {})`,
-				`		else {`,
+				`			this.true_nodes.update({${[...this.true_scope.scope_deps].map(i => `${i}: this.i.${i}`).join(', ')}}, {}, {})`,
+				`		else `,
 				`			this.true_nodes = new closure_If_True_${this.uid}({${[...this.true_scope.scope_deps].map(i => `${i}: this.i.${i}`).join(', ')}}, {}, {});`,
-				`			$changed = true;`,
-				`		}`,
 				...true_types.map(t => {
 					return `		this.r.n.${t}.push(...this.true_nodes.r.n.${t});`
 				})] : []),
-				`		return $changed;`,
+				`		return true;`,
 				`	}`,
 			...(this.false_scope ? [
 				`	else {`,
-				`		let $changed = false;`,
 				`		if (this.false_nodes !== null)`,
-				`			$changed = this.false_nodes.update({${[...this.false_scope.scope_deps].map(i => `${i}: this.i.${i}`).join(', ')}}, {}, {})`,
-				`		else {`,
+				`			this.false_nodes.update({${[...this.false_scope.scope_deps].map(i => `${i}: this.i.${i}`).join(', ')}}, {}, {})`,
+				`		else `,
 				`			this.false_nodes = new closure_If_False_${this.uid}({${[...this.false_scope.scope_deps].map(i => `${i}: this.i.${i}`).join(', ')}}, {}, {});`,
-				`			$changed = true;`,
-				`		}`,
 				...false_types.map(t => {
 					return `		this.r.n.${t}.push(...this.false_nodes.r.n.${t});`
 				}),
-				`		return $changed;`,
+				`		return true;`,
 				`	}`] : []),
 				`}`,
 

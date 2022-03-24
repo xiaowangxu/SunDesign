@@ -2258,6 +2258,13 @@ export const SunDesignExpressionPrelude = {
 				datatype: "base",
 				value: "euler"
 			}, "getQuatEuler"],
+		},
+		$array: {
+			size: [{
+				type: "datatype",
+				datatype: "base",
+				value: "int"
+			}, "getArraySize"],
 		}
 	}
 }
@@ -2354,6 +2361,11 @@ export const SunDesignExpressionVisitor = function (prelude = SunDesignExpressio
 		return [null, null]
 	}
 	function match_Dot(datatype, iden) {
+		if (datatype.datatype === 'arraytype') datatype = {
+			type: 'datatype',
+			datatype: 'base',
+			value: '$array'
+		}
 		if (datatype.datatype !== 'base') return [null, null]
 		if (STRUCTS[datatype.value] === undefined) return [null, null]
 		if (STRUCTS[datatype.value][iden] === undefined) return [null, null]
