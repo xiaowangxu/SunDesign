@@ -24,7 +24,7 @@
 	import * as rt from "./SunDesignRuntime.js";
 
 	const OPT = { for_diff: true, if_branch_cache: true, inline_contanst_exp: false };
-	const LOOP = 1000000;
+	const LOOP = 100000;
 
 	const ENV = new env(undefined, OPT);
 
@@ -51,12 +51,13 @@
 		const func = new Function(`${code}\nconst $$ = new ${entry}();\nreturn $$;`);
 		const $$ = func();
 
+		// console.log($$);
 
 		console.log($$.r.n.float);
 		$$.update({ test: false });
 		console.log($$.r.n.float);
-		$$.update({ test: true });
-		console.log($$.r.n.float);
+		// $$.update({ test: true });
+		// console.log($$.r.n.float);
 
 
 		const time = Date.now();

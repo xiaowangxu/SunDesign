@@ -19,6 +19,6 @@ export const TAG_Number_0 =
         return false;
     }
     dispose() {
-        // console.log("dispose component_Num");
+        // console.log("dispose component_Num", this.r.n.float[0]);
     }
 }`}

@@ -558,7 +558,24 @@ const BASE_TYPE = ['int', 'float', 'bool', 'string']
 
 export const SunDesignExpressionPrelude = {
 	FUNCS: {
-		"switch": [
+		range: [{
+			inputs: [{
+				type: "datatype",
+				datatype: "base",
+				value: "int"
+			}],
+			export: [{
+				type: 'datatype',
+				datatype: 'arraytype',
+				count: null,
+				value: {
+					type: 'datatype',
+					datatype: 'base',
+					value: 'int'
+				}
+			}, "range"]
+		}],
+		switch: [
 			{
 				inputs: [
 					{
@@ -3581,6 +3598,10 @@ class OptimizationPass {
 export const SunDesignExpressionOptimizationPass = new OptimizationPass()
 
 export const SunDesignCodeGenPassVisitor = {
+	range: (val) => {
+		return `(()=>{const a = [];for(let i = 0; i < ${val}; i++) a.push(i);return a;})()`
+	},
+	cast_int: (val) => `Math.floor(${val})`,
 	valid: (val) => `(${val} !== undefined)`,
 	int: (val) => val.toString(),
 	bool: (val) => val.toString(),
@@ -3589,6 +3610,7 @@ export const SunDesignCodeGenPassVisitor = {
 	'+': (a, b) => `(${a} + ${b})`,
 	'-': (a, b) => `(${a} - ${b})`,
 	'*': (a, b) => `(${a} * ${b})`,
+	'/': (a, b) => `(${a} / ${b})`,
 	'&&': (a, b) => `(${a} && ${b})`,
 	'||': (a, b) => `(${a} && ${b})`,
 	'!': (a) => `(!${a})`,

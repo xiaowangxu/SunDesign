@@ -9,7 +9,24 @@
 </inputs>
 <template>
 	<!-- 12*48 = 576 / 13*48 = 624 -->
+	<!-- <cache float id="sum">
+		<add>
+			<for array="range(number1)" iter="num2">
+				<num n="num2" />
+			</for>
+		</add>
+	</cache>
+	<compute int id="compute" exp="10" /> -->
+
 	<add id="add">
+		<!-- <if test="test" param:sum="#sum.result" param:compute="#compute.result">
+			<for array="[1,2,3,4]" index="idx" param:compute2="compute">
+				<num n="compute2" />
+			</for>
+			<else>
+				<num n="sum" />
+			</else>
+		</if> -->
 		<!-- 12/13 -->
 		<!-- <for array="switch(test, [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,1.0, 1.0, 1.0, 1.0])"
 			iter="num">
@@ -19,16 +36,16 @@
 				<num n="1.0" />
 			</for>
 		</for> -->
-		<if test="test">
+		<!-- <if test="test">
 			<num n="number1" />
 			<else>
 				<num n="number2" />
 			</else>
-		</if>
+		</if> -->
 
 		<!-- 5, 1 -->
 		<!-- add - (30+5+5+5, 30+1+1+1) - 78 -->
-		<!-- <for array="[number1, number2]" iter="num">
+		<for array="[number1, number2]" iter="num">
 			<if test="test">
 				<num n="num" />
 				<else>
@@ -40,9 +57,9 @@
 					</for>
 				</else>
 			</if>
-		</for> -->
+		</for>
 	</add>
 </template>
 <outputs>
-	<float name="input0" value="#add.result - 1" />
+	<!-- <float name="input0" value="#add.result - 1" /> -->
 </outputs>
