@@ -22,7 +22,8 @@
 			<num n="num2" />
 		</for>
 	</collect>
-	<!-- <compute int id="compute" exp="10" /> -->
+
+	<compute int id="compute" exp="10" />
 
 	<!-- 10 - 5 + 5 + 1 + 5 + 1 + 5 = 22 -->
 	<slots a="10.0">
@@ -34,52 +35,6 @@
 	<add id="add">
 		<num2 int="1" float="4.0" />
 		<num n="int(#sum.result)" />
-		<!-- <num n="number1" /> -->
-		<!-- <num2 int="int(number2)" float="number2" /> -->
-
-
-		<!-- <if test="test" param:sum="#sum.result" param:compute="#compute.result">
-			<for array="[1,2,3,4]" index="idx" param:compute2="compute">
-				<num n="compute2" />
-			</for>
-			<else>
-				<num n="sum" />
-			</else>
-		</if> -->
-
-
-		<!-- 12*48 = 576 / 13*48 = 624 -->
-		<!-- 12/13 -->
-		<!-- <for array="switch(test, [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,1.0, 1.0, 1.0, 1.0])"
-			iter="num">
-			<for array="[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,1.0, 1.0, 1.0, 1.0,1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,1.0, 1.0, 1.0, 1.0,1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,1.0, 1.0, 1.0, 1.0]"
-				iter="num2">
-				<num n="1.0" />
-			</for>
-		</for> -->
-
-
-		<!-- <if test="test">
-			<num n="number1" />
-			<else>
-				<num n="number2" />
-			</else>
-		</if> -->
-
-		<!-- add - (30+5+5+5, 30+1+1+1) - 78 -->
-		<!-- <for array="[number1, number2]" iter="num">
-			<if test="test">
-				<num n="num" />
-				<else>
-					<for array="['hello', 'world', '!']" iter="num2">
-						<slots a="10.0">
-							<num n="5.0" />
-						</slots>
-						<num n="num" />
-					</for>
-				</else>
-			</if>
-		</for> -->
 	</add>
 
 	<add>
@@ -88,8 +43,8 @@
 		</for>
 	</add>
 
+	<!-- 12*48 = 576 / 13*48 = 624 -->
 	<add>
-		<!-- 12*48 = 576 / 13*48 = 624 -->
 		<for array="switch(test, [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,1.0, 1.0, 1.0, 1.0])"
 			iter="num">
 			<for array="[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,1.0, 1.0, 1.0, 1.0,1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,1.0, 1.0, 1.0, 1.0,1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,1.0, 1.0, 1.0, 1.0]"
@@ -108,8 +63,8 @@
 		</if>
 	</add>
 
+	<!-- add - (30+5+5+5, 30+1+1+1) - 78 -->
 	<add>
-		<!-- add - (30+5+5+5, 30+1+1+1) - 78 -->
 		<for array="[number1, number2]" iter="num">
 			<if test="test">
 				<num n="num" />
@@ -127,5 +82,5 @@
 
 </template>
 <outputs>
-	<float name="input0" value="#add.result - 1" />
+	<float name="output" value="#add.result - 1 + #compute.result" />
 </outputs>

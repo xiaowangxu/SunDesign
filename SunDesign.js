@@ -788,16 +788,16 @@ class SDML_Component extends SDML_Node {
 				throw new Error(`types do not match:\nthe desired types are:\n${this.types.to_List().map(i => `* ${i}`).join("\n")}\nbut the compiled results are:\n${this.compile_res.types.to_List().map(i => `* ${i}`).join("\n")}`);
 			}
 			this.types = this.compile_res.types;
-			const mermaid = this.compile_res.to_Mermaid();
-			render_Graph(mermaid).then(svg => {
-				console.log(`Graph Preview: ${this.url}\n\t%c %c`, `border: black 1px solid; background: url("data:image/svg+xml;base64,${btoa(svg)}") no-repeat center; padding: 180px 280px; background-size: contain;`, "");
-			})
+			// const mermaid = this.compile_res.to_Mermaid();
+			// render_Graph(mermaid).then(svg => {
+			// 	console.log(`Graph Preview: ${this.url}\n\t%c %c`, `border: black 1px solid; background: url("data:image/svg+xml;base64,${btoa(svg)}") no-repeat center; padding: 180px 280px; background-size: contain;`, "");
+			// })
 			const codegen = new SDML_Compile_CodeGen(this.env, this.class_name, this.compile_res, this.env.opt);
 			const code = codegen.generate();
 			this.env.add_Template(this.class_name, code);
 		}
 		catch (err) {
-			console.log(err)
+			// console.log(err)
 			throw new Error(`${err.message}\nin ${this.url}`);
 		}
 	}
@@ -996,12 +996,29 @@ class TypesManager {
 		if (a in this.map && b in this.map) {
 			let cnt = a;
 			while (true) {
-				if (a === null) return false;
-				if (a === b) return true;
-				a = this.map[a].parent?.name ?? null;
+				if (cnt === null) return false;
+				if (cnt === b) return true;
+				cnt = this.map[cnt].parent?.name ?? null;
 			}
 		}
 		return false;
+	}
+
+	param(a) {
+		if (a in this.map) {
+			const arr = [];
+			let ans = {};
+			let cnt = a;
+			while (true) {
+				if (cnt === null) break;
+				const obj = this.map[cnt];
+				arr.push(obj.params);
+				cnt = obj.parent?.name ?? null;
+			}
+			arr.reverse();
+			arr.forEach(params => ans = { ...ans, ...params });
+			return ans;
+		}
 	}
 }
 
@@ -3446,17 +3463,35 @@ TypesManagerSingleton.extends(null, 'number', {
 		default: '0'
 	}
 })
-
 TypesManagerSingleton.extends('number', 'int', {
 	n: {
 		datatype: ExpTypes.base(ExpTypes.int),
 		default: '0'
 	}
 })
-
 TypesManagerSingleton.extends('number', 'float', {
 	n: {
 		datatype: ExpTypes.base(ExpTypes.float),
 		default: '0.0'
+	}
+})
+TypesManagerSingleton.extends(null, 'object3d', {
+	pos: {
+		datatype: ExpTypes.base(ExpTypes.vec3),
+		default: 'vec3(0)'
+	},
+	rot: {
+		datatype: ExpTypes.base(ExpTypes.euler),
+		default: 'euler(0,0,0)'
+	},
+	scale: {
+		datatype: ExpTypes.base(ExpTypes.vec3),
+		default: 'vec3(0)'
+	}
+})
+TypesManagerSingleton.extends('object3d', 'light', {
+	color: {
+		datatype: ExpTypes.base(ExpTypes.string),
+		default: "'#ff0000'"
 	}
 })

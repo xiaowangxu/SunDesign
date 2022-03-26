@@ -23,7 +23,7 @@
 	import { Environment as env } from "./SunDesign.js";
 	import * as rt from "./SunDesignRuntime.js";
 
-	const OPT = { for_diff: true, if_branch_cache: true, inline_contanst_exp: false };
+	const OPT = { for_diff: true, if_branch_cache: true, inline_contanst_exp: true };
 	const LOOP = 100000;
 
 	const ENV = new env(undefined, OPT);
@@ -51,7 +51,7 @@
 		const func = new Function(`${code}\nconst $$ = new ${entry}();\nreturn $$;`);
 		const $$ = func();
 
-		// console.log($$);
+		console.log($$);
 
 		console.log($$.r.n.number);
 		$$.update({ test: false });
