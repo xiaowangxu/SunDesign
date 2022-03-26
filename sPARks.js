@@ -2525,10 +2525,10 @@ export function typeCheck(a, b, opt = {}) {
 	if (a.datatype === b.datatype) {
 		if (a.datatype === 'base') {
 			if (a.value === '$number') {
-				return 'int' === b.value || 'float' === b.value
+				return 'int' === b.value || 'float' === b.value || '$number' === b.value
 			}
 			if (b.value === '$number') {
-				return 'int' === a.value || 'float' === a.value
+				return 'int' === a.value || 'float' === a.value || '$number' === a.value
 			}
 			else
 				return a.value === b.value

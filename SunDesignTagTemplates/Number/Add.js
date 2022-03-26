@@ -6,16 +6,16 @@ export const TAG_Add_0 =
         this.init(c, s);
     }
     init(c, s) {
-        const ans = c.default.float.reduce((f, sum) => sum += f, 0);
+        const ans = c.default.number.reduce((f, sum) => sum += f, 0);
         this.r = {
-            n: { float: [ans] },
+            n: { number: [ans] },
             e: { result: ans }
         }
     }
     update(i, c, s) {
-        const ans = c.default.float.reduce((f, sum) => sum += f, 0);
-        if (ans !== this.r.n.float[0]) {
-            this.r.n.float[0] = ans;
+        const ans = c.default.number.reduce((f, sum) => sum += f, 0);
+        if (ans !== this.r.n.number[0]) {
+            this.r.n.number[0] = ans;
             this.r.e.result = ans;
             return true;
         }

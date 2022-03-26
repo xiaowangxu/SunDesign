@@ -1,4 +1,4 @@
-import { TAG_Number_0 } from "./Number/Number.js";
+import { TAG_Number_0, TAG_Number_2 } from "./Number/Number.js";
 import { TAG_Add_0 } from "./Number/Add.js";
 import { TAG_ComputeBase_0 } from "./Compute/ComputeBase.js";
 import { TAG_CollectBase } from "./Compute/Collect.js";
@@ -27,6 +27,7 @@ const BASE =
 export {
     BASE,
     TAG_Number_0,
+    TAG_Number_2,
     TAG_Add_0,
     TAG_ComputeBase_0,
     TAG_CollectBase,

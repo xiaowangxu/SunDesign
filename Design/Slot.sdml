@@ -6,7 +6,7 @@
 </inputs>
 <slots>
 	<default>
-		<float />
+		<number />
 	</default>
 </slots>
 <template>

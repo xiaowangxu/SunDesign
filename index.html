@@ -53,12 +53,12 @@
 
 		// console.log($$);
 
-		console.log($$.r.n.float);
+		console.log($$.r.n.number);
 		$$.update({ test: false });
-		console.log($$.r.n.float);
-		// $$.update({ test: true });
-		// console.log($$.r.n.float);
-
+		console.log($$.r.n.number);
+		$$.update({ number1: 101 });
+		console.log($$.r.n.number);
+		$$.update({ test: true });
 
 		const time = Date.now();
 		console.time("updating")
@@ -71,7 +71,7 @@
 		const run_time = Date.now() - time;
 		console.log(`total update count: ${count} / ${LOOP}`);
 		console.log(`total run time: ${run_time}ms, avg run time: ${run_time / LOOP}ms`);
-		console.log($$.r.n.float);
+		console.log($$.r.n.number);
 	}).finally(() => {
 		console.timeEnd("compiling");
 	})
