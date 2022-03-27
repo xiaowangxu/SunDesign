@@ -79,9 +79,6 @@
 			</if>
 		</for>
 	</add>
-
-	<vec2 />
-
 </template>
 <outputs>
 	<float name="output" value="#add.result - 1 + #compute.result" />

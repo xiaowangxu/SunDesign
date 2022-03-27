@@ -1,22 +1,24 @@
 <refs>
 </refs>
 <inputs>
-	<float name="time" />
+	<float name="time" default="2.5" />
 	<int name="count" default="10" />
 </inputs>
+<type>
+	<number count="2" />
+</type>
 <template>
-	<compute id="scale" float exp="time / 10 % 0.25 + 0.1" />
-	<scene>
-		<for array="range(count)" index="x" param:scale="#scale.result">
-			<for array="range(count)" index="y" param:scale2="scale">
-				<mesh pos="vec3(x * 0.5 - 0.5 * count / 2 + 0.5 / 2,y * 0.5 - 0.5 * count / 2 + 0.5 / 2,0)"
-					rot="euler(time + x, (time + y)/2, 0)" scale="vec3(0.25)">
-					<box-geo />
-					<material color="color((time + x/10) % 1.0, 0, (time + y/10 + 0.25) % 1.0)" />
-				</mesh>
-			</for>
+	<add>
+		<for array="range(count)" index="index" iter="iter">
+			<num n="time + index" />
+			<num n="count + iter" />
 		</for>
-	</scene>
+	</add>
 
-	<perspectivecamera pos="vec3(sin(time),cos(time), 5)" />
+	<if test="count == 10">
+		<num n="5" />
+		<else>
+			<num n="233" />
+		</else>
+	</if>
 </template>

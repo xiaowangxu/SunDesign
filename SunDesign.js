@@ -1613,7 +1613,7 @@ class SDML_Compile_Scope {
  * undefined means cannot be resolve earlier
  */
 class SDML_Compiler_Visitor {
-	constructor(scope, name, id, parent, ast, params) {
+	constructor(scope, name, id, parent, ast, params, param_inputs_for_bitmasks = [], auto_bitmasks = true) {
 		this.scope = scope;
 		this.name = name;
 		this.id = id;
@@ -1623,8 +1623,11 @@ class SDML_Compiler_Visitor {
 		this.noderefs = new Set();
 		this.params = {};
 		this.types_maps = {};
-		if (params !== undefined)
+		if (params !== undefined) {
 			this.parse(params, ast);
+		}
+		this.auto_bitmasks = auto_bitmasks;
+		this.bitmasks = new BitMask([...param_inputs_for_bitmasks, '$children']);
 	}
 
 	static entries = [];
@@ -1799,7 +1802,7 @@ class SDML_If extends SDML_Compiler_Visitor {
 				datatype: ExpTypes.base(ExpTypes.bool),
 				alias: '$test'
 			}
-		});
+		}, [], false);
 		const carry_params = {};
 		this.scoped_params = {};
 		for (const param in ast.attributes) {
@@ -2225,7 +2228,7 @@ class SDML_For extends SDML_Compiler_Visitor {
 				datatype: ExpTypes.array(ExpTypes.base(ExpTypes.any)),
 				alias: '$array'
 			}
-		});
+		}, [], false);
 		if (ast.children.length === 0) {
 			throw new SDML_Compile_Error(`in node <for id="${this.id}"/> it does not has any sub nodes, you should always provide sub nodes as the loop body`);
 		}
@@ -2529,7 +2532,7 @@ class SDML_ComponentNode extends SDML_Compiler_Visitor {
 				datatype: component.inputs[param].datatype,
 			}
 		}
-		super(scope, name, id, parent, ast, params);
+		super(scope, name, id, parent, ast, params, [], false);
 		this.component = component;
 		this.collection = null;
 		this.types = component.types.clone();
@@ -2888,8 +2891,8 @@ class SDML_Number extends SDML_Compiler_Visitor {
 			n: {
 				datatype: ExpTypes.base(ExpTypes.number),
 				default: '0'
-			},
-		});
+			}
+		}, ['n']);
 	}
 
 	static inputs = Types.NONE;
@@ -3203,8 +3206,6 @@ class SDML_THREE_Vec2 extends SDML_Compiler_Visitor {
 	}
 }
 
-
-
 function create_Component(class_name,
 	default_inputs = [],
 	bit_masks = 0,
@@ -3482,11 +3483,15 @@ class SDML_Compile_CodeGen {
 					return `${len ? '' : '('}this.b[${layer}] & /* ${masked_deps} */ ${mask}${len ? '' : ')'}`;
 				}));
 			}
-			if (masks.length > 0)
+			if (masks.length > 0) {
+				const sp_masks = node.bitmasks.get_Masks([param])
 				param_updates.push(`if (${masks.join(" || ")}) {`, `	this.${param_name} = ${node.params[param].code};`, `	this.b[${p_layer}] |= ${p_mask};`,
+					// `	// ${node.name} - param : ${param} is component : ${node instanceof SDML_ComponentNode} bitmasks : ${node.bitmasks.inputs} this.${this.get_NodeCache(node)}.b[${sp_layer}] |= ${sp_mask};`,
+					...(sp_masks.length === 0 || !node.auto_bitmasks ? [] : [`	this.${this.get_NodeCache(node)}.b[${sp_masks[0][0]}] |= ${sp_masks[0][1]};`]),
 					// debug
 					// `	console.log(">> update ${node.name} uid: ${node.uid} - ${param}", this.b[${p_layer}]);`,
 					`}`)
+			}
 		}
 		// console.log(param_updates.join('\n'));
 		ans.push(...param_updates);
@@ -3504,12 +3509,22 @@ class SDML_Compile_CodeGen {
 			const len = arr.length === 1;
 			return `${len ? '' : '('}this.b[${layer}] & /* ${masked_params} */ ${mask}${len ? '' : ')'}`;
 		});
-		if (if_test.length > 0)
+		if (if_test.length > 0) {
+			const children_masks = this.bitmasks.get_Masks(children);
+			const node_name = this.get_NodeCache(node);
+			const [[c_layer = 0, c_mask = 0]] = node.bitmasks.get_Masks(['$children']);
+			const children_test = children_masks.map(([layer, mask], idx, arr) => {
+				const len = arr.length === 1;
+				return `${len ? '' : '('}this.${node_name}.b[${layer}] & ${mask}${len ? '' : ')'}`;
+			});
 			ans.push(`if (${if_test.join(" || ")}) {`,
 				// debug
 				// `	console.log(">> update ${node.name} uid: ${node.uid}");`,
+				`	// ${node.name} children : ${children} bitmasks : ${children_masks} children bitmask : ${c_layer},${c_mask}`,
+				...(children_test.length === 0 || !node.auto_bitmasks ? [] : [`	if (${children_test.join(" || ")}) this.${node_name}.b[${c_layer}] |= ${c_mask};`]),
 				`	this.b[${n_layer}] |= ${n_mask} & (this.${node_name}.update(${this.get_NodeInputs(node)}, ${this.get_NodeChildren(node)}, ${this.get_NodeSlots(node)}) ? 2147483647 : 0);`,
 				`}`)
+		}
 
 		// console.log(masked_params);
 
@@ -3521,6 +3536,8 @@ class SDML_Compile_CodeGen {
 		const ans = [`let $changed = false;`];
 		for (const node of this.scope.order) {
 			// console.log(node);
+			if (node.auto_bitmasks)
+				ans.push(`this.${this.get_NodeCache(node)}.b = ${node.bitmasks.get_EmptyArrayString()};`)
 			ans.push(...this.get_NodeUpdate(node));
 		}
 		// update result
@@ -3717,6 +3734,14 @@ class BitMask {
 
 	to_String() {
 
+	}
+
+	get_EmptyArrayString() {
+		const arr = [];
+		const size = this.mask_count;
+		for (let i = 0; i < size; i++)
+			arr.push('0');
+		return `[${arr.join(', ')}]`;
 	}
 }
 

@@ -2,7 +2,7 @@ export const TAG_Number_0 =
 {
     name: 'component_Num', code: `class component_Num extends ComponentBase {
     constructor(i, c, s) {
-        super();
+        super({n:0, ...i}, [0]);
         this.init(i, c, s);
     }
     init(i, c, s) {
@@ -12,7 +12,7 @@ export const TAG_Number_0 =
         }
     }
     update(i, c, s) {
-        if (i.n !== this.r.n.number[0]) {
+        if ((this.b & 1) && (i.n !== this.r.n.number[0])) {
             this.r.n.number[0] = i.n;
             return true;
         }
