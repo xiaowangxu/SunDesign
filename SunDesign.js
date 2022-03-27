@@ -788,16 +788,16 @@ class SDML_Component extends SDML_Node {
 				throw new Error(`types do not match:\nthe desired types are:\n${this.types.to_List().map(i => `* ${i}`).join("\n")}\nbut the compiled results are:\n${this.compile_res.types.to_List().map(i => `* ${i}`).join("\n")}`);
 			}
 			this.types = this.compile_res.types;
-			// const mermaid = this.compile_res.to_Mermaid();
-			// render_Graph(mermaid).then(svg => {
-			// 	console.log(`Graph Preview: ${this.url}\n\t%c %c`, `border: black 1px solid; background: url("data:image/svg+xml;base64,${btoa(svg)}") no-repeat center; padding: 180px 280px; background-size: contain;`, "");
-			// })
+			const mermaid = this.compile_res.to_Mermaid();
+			render_Graph(mermaid).then(svg => {
+				console.log(`Graph Preview: ${this.url}\n\t%c %c`, `border: black 1px solid; background: url("data:image/svg+xml;base64,${btoa(svg)}") no-repeat center; padding: 180px 280px; background-size: contain;`, "");
+			})
 			const codegen = new SDML_Compile_CodeGen(this.env, this.class_name, this.compile_res, this.env.opt);
 			const code = codegen.generate();
 			this.env.add_Template(this.class_name, code);
 		}
 		catch (err) {
-			// console.log(err)
+			console.log(err);
 			throw new Error(`${err.message}\nin ${this.url}`);
 		}
 	}
@@ -1077,14 +1077,14 @@ class Types {
 				const mapped_keys = keys.map(t => {
 					return t === key || TypesManagerSingleton.instance_of(t, key);
 				});
-				const passeed = mapped_keys.reduce((last, cnt) => last && cnt, true);
+				const passed = mapped_keys.reduce((last, cnt) => last || cnt, false);
 				const count_b = mapped_keys.reduce((last, cnt, idx) => {
 					if (cnt) last += map.get(keys[idx]);
 					return last;
 				}, 0);
 				const count_a = types.types[key];
 				// console.log(passeed, count_b);
-				if (!passeed/*!map.has(key)*/) {
+				if (!passed/*!map.has(key)*/) {
 					if (inf && count_a === Infinity);
 					else
 						return false
@@ -1216,6 +1216,8 @@ class ExpTypes {
 	static vec2 = 'vec2';
 	static vec3 = 'vec3';
 	static mat4 = 'mat4';
+	static color = 'color';
+	static quat = 'quat';
 	static euler = 'euler';
 	static any = '$any';
 	static number = '$number';
@@ -2949,6 +2951,260 @@ class SDML_Number2 extends SDML_Compiler_Visitor {
 	}
 }
 
+
+// THREE
+class SDML_THREE_Scene extends SDML_Compiler_Visitor {
+	constructor(scope, name, id, parent, ast) {
+		super(scope, name, id, parent, ast, TypesManagerSingleton.param('scene'));
+		this.matched = null;
+		this.subs = [];
+	}
+
+	static entries = [];
+	static inputs = {
+		default: {
+			default: new Types({
+				object3d: Infinity
+			})
+		},
+	};
+	static exports = {};
+
+	to_Mermaid(ans, link) {
+		ans.push(`Node_${this.uid}(scene id=${this.id} match=${this.matched})`);
+		if (this.matched === 'default')
+			for (const sub of this.subs) {
+				link.push(`Node_${sub.uid} -->|object3d| Node_${this.uid}`);
+			}
+	}
+
+	receive_Sub(types, collection, match_type) {
+		this.matched = match_type;
+		switch (match_type) {
+			case 'default': {
+				const defaults = collection.get_Class('default', 'object3d');
+				this.subs = defaults;
+				for (const node of defaults) {
+					this.scope.graph.add_Edge(node, this);
+				}
+				break;
+			}
+		}
+	}
+
+	add_ToCollection(collection, param) {
+		collection.add(param, 'scene', this);
+	}
+
+	get_NewNode(codegen) {
+		return codegen.get_Template('TAG_THREE_Scene_0');
+	}
+
+	get_NodeChildren(codegen) {
+		switch (this.matched) {
+			case 'default': {
+				const ans = { default: { object3d: [] } };
+				this.subs.forEach(s => ans.default.object3d.push(...s.get_TypeMapped('object3d')));
+				return ans;
+			}
+		}
+	}
+
+	get_Type() {
+		return SDML_THREE_Scene.type;
+	}
+
+	static get type() {
+		return new Types({ scene: 1 });
+	}
+}
+
+class SDML_THREE_PerspectiveCamera extends SDML_Compiler_Visitor {
+	constructor(scope, name, id, parent, ast) {
+		super(scope, name, id, parent, ast, TypesManagerSingleton.param('perspectivecamera'));
+	}
+
+	static inputs = Types.NONE;
+
+	to_Mermaid(ans) {
+		ans.push(`Node_${this.uid}(perspectivecamera id=${this.id})`);
+	}
+
+	add_ToCollection(collection, param) {
+		collection.add(param, 'perspectivecamera', this);
+	}
+
+	get_Type() {
+		return SDML_THREE_PerspectiveCamera.type;
+	}
+
+	get_NewNode(codegen) {
+		return codegen.get_Template('TAG_THREE_PerspectiveCamera_0');
+	}
+
+	static get type() {
+		return new Types({ perspectivecamera: 1 });
+	}
+}
+
+class SDML_THREE_BoxGeometry extends SDML_Compiler_Visitor {
+	constructor(scope, name, id, parent, ast) {
+		super(scope, name, id, parent, ast, TypesManagerSingleton.param('boxgeometry'));
+	}
+
+	static inputs = Types.NONE;
+
+	to_Mermaid(ans) {
+		ans.push(`Node_${this.uid}(box-geometry id=${this.id})`);
+	}
+
+	add_ToCollection(collection, param) {
+		collection.add(param, 'boxgeometry', this);
+	}
+
+	get_Type() {
+		return SDML_THREE_BoxGeometry.type;
+	}
+
+	get_NewNode(codegen) {
+		return codegen.get_Template('TAG_THREE_BoxGeometry_0');
+	}
+
+	static get type() {
+		return new Types({ boxgeometry: 1 });
+	}
+}
+
+class SDML_THREE_Material extends SDML_Compiler_Visitor {
+	constructor(scope, name, id, parent, ast) {
+		super(scope, name, id, parent, ast, TypesManagerSingleton.param('standardmaterial'));
+	}
+
+	static inputs = Types.NONE;
+
+	to_Mermaid(ans) {
+		ans.push(`Node_${this.uid}(material id=${this.id})`);
+	}
+
+	add_ToCollection(collection, param) {
+		collection.add(param, 'standardmaterial', this);
+	}
+
+	get_Type() {
+		return SDML_THREE_Material.type;
+	}
+
+	get_NewNode(codegen) {
+		return codegen.get_Template('TAG_THREE_StandardMaterial_0');
+	}
+
+	static get type() {
+		return new Types({ standardmaterial: 1 });
+	}
+}
+
+class SDML_THREE_Mesh extends SDML_Compiler_Visitor {
+	constructor(scope, name, id, parent, ast) {
+		super(scope, name, id, parent, ast, TypesManagerSingleton.param('mesh'));
+		this.matched = null;
+		this.geo = null;
+		this.mats = [];
+	}
+
+	static entries = [];
+	static inputs = {
+		default: {
+			default: new Types({
+				geometry: 1,
+				material: 1,
+			})
+		},
+	};
+	static exports = {};
+
+	to_Mermaid(ans, link) {
+		ans.push(`Node_${this.uid}(mesh id=${this.id} match=${this.matched})`);
+		if (this.matched === 'default') {
+			for (const sub of this.mats) {
+				link.push(`Node_${sub.uid} -->|material| Node_${this.uid}`);
+			}
+			link.push(`Node_${this.geo.uid} -->|geometry| Node_${this.uid}`);
+		}
+	}
+
+	receive_Sub(types, collection, match_type) {
+		this.matched = match_type;
+		switch (match_type) {
+			case 'default': {
+				const mats = collection.get_Class('default', 'material');
+				this.mats = mats;
+				this.geo = collection.get_Class('default', 'geometry')[0];
+				this.scope.graph.add_Edge(this.geo, this);
+				for (const node of mats) {
+					this.scope.graph.add_Edge(node, this);
+				}
+				break;
+			}
+		}
+	}
+
+	add_ToCollection(collection, param) {
+		collection.add(param, 'mesh', this);
+	}
+
+	get_NewNode(codegen) {
+		return codegen.get_Template('TAG_THREE_Mesh_0');
+	}
+
+	get_NodeChildren(codegen) {
+		switch (this.matched) {
+			case 'default': {
+				const ans = { default: { geometry: [...this.geo.get_TypeMapped('geometry')], material: [] } };
+				this.mats.forEach(s => ans.default.material.push(...s.get_TypeMapped('material')));
+				return ans;
+			}
+		}
+	}
+
+	get_Type() {
+		return SDML_THREE_Mesh.type;
+	}
+
+	static get type() {
+		return new Types({ mesh: 1 });
+	}
+}
+
+class SDML_THREE_Vec2 extends SDML_Compiler_Visitor {
+	constructor(scope, name, id, parent, ast) {
+		super(scope, name, id, parent, ast, TypesManagerSingleton.param('vec2'));
+	}
+
+	static inputs = Types.NONE;
+
+	to_Mermaid(ans) {
+		ans.push(`Node_${this.uid}(vec2 id=${this.id})`);
+	}
+
+	add_ToCollection(collection, param) {
+		collection.add(param, 'vec2', this);
+	}
+
+	get_Type() {
+		return SDML_THREE_Vec2.type;
+	}
+
+	get_NewNode(codegen) {
+		return codegen.get_Template('TAG_THREE_Vec2_0');
+	}
+
+	static get type() {
+		return new Types({ vec2: 1 });
+	}
+}
+
+
+
 function create_Component(class_name,
 	default_inputs = [],
 	bit_masks = 0,
@@ -3398,6 +3654,13 @@ const ALL_NODE_TYPES = {
 	'compute': SDML_Compute,
 	'collect': SDML_Collect,
 	'cache': SDML_Cache,
+	// THREE
+	'scene': SDML_THREE_Scene,
+	'perspectivecamera': SDML_THREE_PerspectiveCamera,
+	'vec2': SDML_THREE_Vec2,
+	'box-geo': SDML_THREE_BoxGeometry,
+	'mesh': SDML_THREE_Mesh,
+	'material': SDML_THREE_Material,
 }
 
 // const a = new Types({ a: 1 });
@@ -3457,24 +3720,25 @@ class BitMask {
 	}
 }
 
+
 TypesManagerSingleton.extends(null, 'number', {
 	n: {
 		datatype: ExpTypes.base(ExpTypes.number),
 		default: '0'
 	}
-})
+});
 TypesManagerSingleton.extends('number', 'int', {
 	n: {
 		datatype: ExpTypes.base(ExpTypes.int),
 		default: '0'
 	}
-})
+});
 TypesManagerSingleton.extends('number', 'float', {
 	n: {
 		datatype: ExpTypes.base(ExpTypes.float),
 		default: '0.0'
 	}
-})
+});
 TypesManagerSingleton.extends(null, 'object3d', {
 	pos: {
 		datatype: ExpTypes.base(ExpTypes.vec3),
@@ -3486,12 +3750,99 @@ TypesManagerSingleton.extends(null, 'object3d', {
 	},
 	scale: {
 		datatype: ExpTypes.base(ExpTypes.vec3),
-		default: 'vec3(0)'
+		default: 'vec3(1)'
 	}
-})
-TypesManagerSingleton.extends('object3d', 'light', {
+});
+TypesManagerSingleton.extends('object3d', 'scene', {
+	bg: {
+		datatype: ExpTypes.base(ExpTypes.color),
+		default: 'color(0,0,0)'
+	}
+});
+TypesManagerSingleton.extends('object3d', 'mesh', {
+
+});
+TypesManagerSingleton.extends('object3d', 'camera', {
+
+});
+TypesManagerSingleton.extends('camera', 'perspectivecamera', {
+	fov: {
+		datatype: ExpTypes.base(ExpTypes.number),
+		default: '75'
+	},
+	near: {
+		datatype: ExpTypes.base(ExpTypes.number),
+		default: '0.01'
+	},
+	far: {
+		datatype: ExpTypes.base(ExpTypes.number),
+		default: '1000'
+	}
+});
+TypesManagerSingleton.extends(null, 'vec2', {
+	x: {
+		datatype: ExpTypes.base(ExpTypes.number),
+		default: '0'
+	},
+	y: {
+		datatype: ExpTypes.base(ExpTypes.number),
+		default: '0'
+	}
+});
+TypesManagerSingleton.extends(null, 'geometry', {
+
+});
+TypesManagerSingleton.extends('geometry', 'boxgeometry', {
+	w: {
+		datatype: ExpTypes.base(ExpTypes.number),
+		default: '1'
+	},
+	h: {
+		datatype: ExpTypes.base(ExpTypes.number),
+		default: '1'
+	},
+	d: {
+		datatype: ExpTypes.base(ExpTypes.number),
+		default: '1'
+	},
+	ws: {
+		datatype: ExpTypes.base(ExpTypes.number),
+		default: '1'
+	},
+	hs: {
+		datatype: ExpTypes.base(ExpTypes.number),
+		default: '1'
+	},
+	ds: {
+		datatype: ExpTypes.base(ExpTypes.number),
+		default: '1'
+	},
+});
+TypesManagerSingleton.extends(null, 'material', {
+});
+TypesManagerSingleton.extends('material', 'standardmaterial', {
 	color: {
-		datatype: ExpTypes.base(ExpTypes.string),
-		default: "'#ff0000'"
+		datatype: ExpTypes.base(ExpTypes.color),
+		default: 'color(1,0,0)'
+	},
+	emissive: {
+		datatype: ExpTypes.base(ExpTypes.color),
+		default: 'color(0,0,0)'
+	},
+	roughness: {
+		datatype: ExpTypes.base(ExpTypes.number),
+		default: '0'
+	},
+	metalness: {
+		datatype: ExpTypes.base(ExpTypes.number),
+		default: '0'
+	},
+	flat: {
+		datatype: ExpTypes.base(ExpTypes.bool),
+		default: 'false'
+	},
+	wireframe: {
+		datatype: ExpTypes.base(ExpTypes.bool),
+		default: 'false'
 	}
-})
+});

@@ -1,9 +1,0 @@
-<refs>
-</refs>
-<inputs>
-	<float name="num1" />
-	<float name="num2" />
-</inputs>
-<template>
-	<num n="num1 - num2" />
-</template>

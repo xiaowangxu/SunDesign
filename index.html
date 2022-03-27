@@ -12,18 +12,55 @@
 		/* background-color: #f8dedb; */
 		/* width: 100vw;
 		height: 100vh; */
+		margin: 0;
+		overflow: hidden;
+		background-color: black;
 	}
 </style>
 
 <body>
-	<button id="copy">Copy code !!</button>
+	<button id="copy" style="position: fixed; bottom: 10px; left: 10px;">Copy code !!</button>
 
 </body>
 <script type="module">
 	import { Environment as env } from "./SunDesign.js";
 	import * as rt from "./SunDesignRuntime.js";
+	import * as THREE from "./lib/three/src/Three.js";
 
-	const OPT = { for_diff: true, if_branch_cache: true, inline_contanst_exp: true };
+	// THREE =========================================================================
+	let scene
+	let camera
+	let renderer
+
+	function create_THREE() {
+		scene = new THREE.Scene();
+		camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+
+		renderer = new THREE.WebGLRenderer();
+
+		window.renderer = renderer;
+
+		renderer.setSize(window.innerWidth, window.innerHeight);
+		document.body.appendChild(renderer.domElement);
+		window.addEventListener("resize", () => {
+			camera.aspect = window.innerWidth / window.innerHeight;
+			camera.updateProjectionMatrix();
+			renderer.setSize(window.innerWidth, window.innerHeight);
+		})
+	}
+
+	let render_func = () => { }
+	let time = 0;
+	function animate() {
+		requestAnimationFrame(animate);
+		time += 0.01;
+		render_func(time);
+		renderer.render(scene, camera);
+	}
+
+	//================================================================================
+
+	const OPT = { for_diff: true, if_branch_cache: true, inline_contanst_exp: false };
 	const LOOP = 100000;
 
 	const ENV = new env(undefined, OPT);
@@ -35,8 +72,8 @@
 	})
 
 	console.time("compiling")
-	ENV.component("test", "./Design/Test.sdml");
-	console.log(ENV);
+	ENV.component("test", "./Design/Scene.sdml");
+	// console.log(ENV);
 	Promise.all(ENV.promises).then(() => {
 		const code = ENV.generate();
 		const entry = ENV.get_ClassName("test");
@@ -48,33 +85,56 @@
 			return [h.toUpperCase(), ...tail].join('');
 		}).join('')}: ${val}`).join('\n'));
 		// console.log(code);
-		const func = new Function(`${code}\nconst $$ = new ${entry}();\nreturn $$;`);
-		const $$ = func();
+		const func = new Function('THREE', `${code}\nconst $$ = new ${entry}();\nreturn $$;`);
+		const $$ = func(THREE);
 
-		console.log($$);
+		create_THREE();
 
-		console.log($$.r.n.number);
-		$$.update({ test: false });
-		console.log($$.r.n.number);
-		$$.update({ number1: 101 });
-		console.log($$.r.n.number);
-		$$.update({ test: true });
+		// console.log($$);
+		// console.log($$.r.n.scene[0]);
 
-		const time = Date.now();
-		console.time("updating")
-		let count = 0;
-		for (let i = 0; i < LOOP; i++) { // number2: Math.floor(i / 100), 
-			const ans = $$.update({ test: i % 200 === 0, number2: Math.floor(i / 100) });
-			if (ans) count++;
+		scene = $$.r.n.scene[0];
+
+		const directionalLight = new THREE.DirectionalLight(0xffffff, 10);
+		directionalLight.rotation.set(Math.PI / 4, 0, 0)
+		directionalLight.position.set(5, 5, 5)
+		const light = new THREE.AmbientLight(0x404040); // soft white light
+
+		console.log(scene);
+
+		camera = $$.r.n.perspectivecamera[0]
+
+		render_func = (time) => {
+			// console.log("render");
+			$$.update({ time: time, count: Math.floor(time * 10) % 14 + 1 });
+			scene.add(directionalLight);
+			scene.add(light);
 		}
-		console.timeEnd("updating")
-		const run_time = Date.now() - time;
-		console.log(`total update count: ${count} / ${LOOP}`);
-		console.log(`total run time: ${run_time}ms, avg run time: ${run_time / LOOP}ms`);
-		console.log($$.r.n.number);
+
+		animate();
+
+		// $$.update({ test: false });
+		// console.log($$.r.n.number);
+		// $$.update({ number1: 101 });
+		// console.log($$.r.n.number);
+		// $$.update({ test: true });
+
+		// const time = Date.now();
+		// console.time("updating")
+		// let count = 0;
+		// for (let i = 0; i < LOOP; i++) { // number2: Math.floor(i / 100), 
+		// 	const ans = $$.update({ test: i % 200 === 0, number2: Math.floor(i / 100) });
+		// 	if (ans) count++;
+		// }
+		// console.timeEnd("updating")
+		// const run_time = Date.now() - time;
+		// console.log(`total update count: ${count} / ${LOOP}`);
+		// console.log(`total run time: ${run_time}ms, avg run time: ${run_time / LOOP}ms`);
+		// console.log($$.r.n.number);
 	}).finally(() => {
 		console.timeEnd("compiling");
 	})
+
 
 </script>
 

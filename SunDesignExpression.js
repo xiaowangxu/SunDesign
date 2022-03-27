@@ -1100,18 +1100,18 @@ export const SunDesignExpressionPrelude = {
 					{
 						type: "datatype",
 						datatype: "base",
-						value: "int"
+						value: "$number"
 					}, {
 						type: "datatype",
 						datatype: "base",
-						value: "int"
+						value: "$number"
 					}
 				],
 				export: (type_1, type_2) => {
 					return [{
 						type: "datatype",
 						datatype: "base",
-						value: "int"
+						value: "float"
 					}, "$keep"]
 				}
 			}
@@ -1989,6 +1989,28 @@ export const SunDesignExpressionPrelude = {
 				}, 'makeMat4PosQuatScale']
 			}
 		],
+		"color": [
+			{
+				inputs: [{
+					type: "datatype",
+					datatype: "base",
+					value: "$number"
+				}, {
+					type: "datatype",
+					datatype: "base",
+					value: "$number"
+				}, {
+					type: "datatype",
+					datatype: "base",
+					value: "$number"
+				}],
+				export: [{
+					type: "datatype",
+					datatype: "base",
+					value: "color"
+				}, "makeColorRGB"]
+			}
+		],
 		"basis": [
 			{
 				inputs: [{
@@ -2168,7 +2190,49 @@ export const SunDesignExpressionPrelude = {
 					value: "mat4"
 				}, 'makeMat4Shear']
 			}
-		]
+		],
+		"sin": [
+			{
+				inputs: [{
+					type: "datatype",
+					datatype: "base",
+					value: "$number"
+				}],
+				export: [{
+					type: "datatype",
+					datatype: "base",
+					value: "float"
+				}, 'sin']
+			},
+		],
+		"cos": [
+			{
+				inputs: [{
+					type: "datatype",
+					datatype: "base",
+					value: "$number"
+				}],
+				export: [{
+					type: "datatype",
+					datatype: "base",
+					value: "float"
+				}, 'cos']
+			},
+		],
+		"tan": [
+			{
+				inputs: [{
+					type: "datatype",
+					datatype: "base",
+					value: "$number"
+				}],
+				export: [{
+					type: "datatype",
+					datatype: "base",
+					value: "float"
+				}, 'tan']
+			},
+		],
 	},
 	STRUCTS: {
 		vec2: {
@@ -2763,6 +2827,11 @@ const SunDesignExpressionOptimizations = {
 		multQuatQuat: (quat1, quat2) => {
 			return OptQuaternion.multiply(quat1.value, quat2.value)
 		},
+
+		// math
+		sin: (arg1) => Math.sin(arg1.value),
+		cos: (arg1) => Math.cos(arg1.value),
+		tan: (arg1) => Math.tan(arg1.value),
 	},
 	NOTCONSTANTFUNCS: {
 		"*": ([const1, const2], [arg1, arg2]) => {
@@ -3602,6 +3671,9 @@ export const SunDesignCodeGenPassVisitor = {
 		return `(()=>{const a = [];for(let i = 0; i < ${val}; i++) a.push(i);return a;})()`
 	},
 	cast_int: (val) => `Math.floor(${val})`,
+	sin: (val) => `Math.sin(${val})`,
+	cos: (val) => `Math.cos(${val})`,
+	tan: (val) => `Math.tan(${val})`,
 	valid: (val) => `(${val} !== undefined)`,
 	int: (val) => val.toString(),
 	bool: (val) => val.toString(),
@@ -3611,6 +3683,7 @@ export const SunDesignCodeGenPassVisitor = {
 	'-': (a, b) => `(${a} - ${b})`,
 	'*': (a, b) => `(${a} * ${b})`,
 	'/': (a, b) => `(${a} / ${b})`,
+	'%': (a, b) => `(${a} % ${b})`,
 	'&&': (a, b) => `(${a} && ${b})`,
 	'||': (a, b) => `(${a} && ${b})`,
 	'!': (a) => `(!${a})`,
@@ -3662,6 +3735,9 @@ export const SunDesignCodeGenPassVisitor = {
 		const n43 = codegen.walk(val.n43, opt);
 		const n44 = codegen.walk(val.n44, opt);
 		return `(new ${opt.THREE}.Matrix4().set(${n11}, ${n12}, ${n13}, ${n14}, ${n21}, ${n22}, ${n23}, ${n24}, ${n31}, ${n32}, ${n33}, ${n34}, ${n41}, ${n42}, ${n43}, ${n44}))`
+	},
+	makeColorRGB: (val, opt, codegen) => {
+		return `(new ${opt.THREE}.Color(${val[0]}, ${val[1]}, ${val[2]}))`
 	},
 	makeMat4Identity: (val, opt, codegen) => {
 		return `(new ${opt.THREE}.Matrix4())`
