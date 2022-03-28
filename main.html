@@ -112,18 +112,18 @@
 		console.log($$.r.n.number);
 		$$.update({ test: true });
 
-		// const time = Date.now();
-		// console.time("updating")
-		// let count = 0;
-		// for (let i = 0; i < LOOP; i++) { // number2: Math.floor(i / 100), 
-		// 	const ans = $$.update({ test: i % 200 === 0, number2: Math.floor(i / 100) });
-		// 	if (ans) count++;
-		// }
-		// console.timeEnd("updating")
-		// const run_time = Date.now() - time;
-		// console.log(`total update count: ${count} / ${LOOP}`);
-		// console.log(`total run time: ${run_time}ms, avg run time: ${run_time / LOOP}ms`);
-		// console.log($$.r.n.number);
+		const time = Date.now();
+		console.time("updating")
+		let count = 0;
+		for (let i = 0; i < LOOP; i++) { // number2: Math.floor(i / 100), 
+			const ans = $$.update({ test: i % 200 === 0, number2: Math.floor(i / 100) });
+			if (ans) count++;
+		}
+		console.timeEnd("updating")
+		const run_time = Date.now() - time;
+		console.log(`total update count: ${count} / ${LOOP}`);
+		console.log(`total run time: ${run_time}ms, avg run time: ${run_time / LOOP}ms`);
+		console.log($$.r.n.number);
 	}).finally(() => {
 		console.timeEnd("compiling");
 	})
