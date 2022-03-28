@@ -1,6 +1,6 @@
 import { Language, Match, MatchTerm, MatchToken, Once_or_None, More_or_None, ChooseOne, LLkChooseOne, SourceScript, ScriptPosition, BaseError, Lexer, Walker, Token, typeToString, typeCheck, cloneType } from "./sPARks.js"
 
-import { Matrix4, Quaternion, Euler, Vector3 } from './lib/three/src/Three.js';
+// import { Matrix4, Quaternion, Euler, Vector3 } from '../lib/three/src/Three.js';
 
 export { SourceScript, typeCheck, typeToString }
 

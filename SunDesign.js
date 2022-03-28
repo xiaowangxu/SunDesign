@@ -1,5 +1,5 @@
-import { typeCheck } from './sPARks.js';
-import { SourceScript, SunDesignExpressionLexer, SunDesignExpressionParser, SunDesignExpressionTypeCheckPass, SunDesignExpressionOptimizationPass, SunDesignExpressionCodeGenPass, typeToString } from './SunDesignExpression.js';
+import { typeCheck } from './SunDesign/sPARks.js';
+import { SourceScript, SunDesignExpressionLexer, SunDesignExpressionParser, SunDesignExpressionTypeCheckPass, SunDesignExpressionOptimizationPass, SunDesignExpressionCodeGenPass, typeToString } from './SunDesign/SunDesignExpression.js';
 import "./lib/mermaid.js";
 import * as SDML_Templates from './SunDesignTagTemplates/templates.js';
 
@@ -1022,7 +1022,7 @@ class TypesManager {
 	}
 }
 
-const TypesManagerSingleton = new TypesManager();
+export const TypesManagerSingleton = new TypesManager();
 
 class Types {
 	constructor(types = null) {
@@ -3680,22 +3680,6 @@ const ALL_NODE_TYPES = {
 	'material': SDML_THREE_Material,
 }
 
-// const a = new Types({ a: 1 });
-// const b = new Types({ b: Infinity, a: Infinity });
-// console.log(a.match_Types(b, true))
-// const a1 = new Types({ a: 1 });
-// const b1 = new Types({ b: 1, a: 1 });
-// console.log(a1.match_Types(b1, true))
-// const a2 = new Types({ a: 1 });
-// const b2 = new Types({ a: Infinity });
-// console.log(a2.match_Types(b2, true))
-// const a3 = new Types();
-// const b3 = new Types({ a: Infinity });
-// console.log(a3.match_Types(b3, true))
-// const a4 = new Types({ b: 1 });
-// const b4 = new Types({ a: Infinity });
-// console.log(a4.match_Types(b4, true))
-
 class BitMask {
 	constructor(inputs = []) {
 		this.inputs = inputs;
@@ -3871,3 +3855,20 @@ TypesManagerSingleton.extends('material', 'standardmaterial', {
 		default: 'false'
 	}
 });
+
+
+// const a = new Types({ a: 1 });
+// const b = new Types({ b: Infinity, a: Infinity });
+// console.log(a.match_Types(b, true))
+// const a1 = new Types({ a: 1 });
+// const b1 = new Types({ b: 1, a: 1 });
+// console.log(a1.match_Types(b1, true))
+// const a2 = new Types({ a: 1 });
+// const b2 = new Types({ a: Infinity });
+// console.log(a2.match_Types(b2, true))
+// const a3 = new Types();
+// const b3 = new Types({ a: Infinity });
+// console.log(a3.match_Types(b3, true))
+// const a4 = new Types({ b: 1 });
+// const b4 = new Types({ a: Infinity });
+// console.log(a4.match_Types(b4, true))

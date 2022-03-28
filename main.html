@@ -23,8 +23,8 @@
 
 </body>
 <script type="module">
-	import { Environment as env } from "./SunDesign.js";
-	import * as THREE from "./lib/three/src/Three.js";
+	import { Environment as env } from "./SunDesign/Compiler.js";
+	// import * as THREE from "./lib/three/src/Three.js";
 
 	// THREE =========================================================================
 	let scene
@@ -71,7 +71,7 @@
 	})
 
 	console.time("compiling")
-	ENV.component("test", "./Design/Scene.sdml");
+	ENV.component("test", "./Design/Test.sdml");
 	// console.log(ENV);
 	Promise.all(ENV.promises).then(() => {
 		const code = ENV.generate();
@@ -85,31 +85,32 @@
 		}).join('')}: ${val}`).join('\n'));
 		// console.log(code);
 		const func = new Function('THREE', `${code}\nconst $$ = new ${entry}();\nreturn $$;`);
-		const $$ = func(THREE);
+		const $$ = func();
+		// const $$ = func(THREE);
 
-		create_THREE();
-		scene = $$.r.n.scene[0];
-		const directionalLight = new THREE.DirectionalLight(0xffffff, 10);
-		directionalLight.rotation.set(Math.PI / 4, 0, 0)
-		directionalLight.position.set(5, 5, 5)
-		const light = new THREE.AmbientLight(0x404040); // soft white light
-		console.log(scene);
-		camera = $$.r.n.perspectivecamera[0]
-		render_func = (time) => {
-			// console.log("render");
-			$$.update({ time: time, count: Math.floor(time * 10) % 14 + 1 });
-			scene.add(directionalLight);
-			scene.add(light);
-		}
-		animate();
+		// create_THREE();
+		// scene = $$.r.n.scene[0];
+		// const directionalLight = new THREE.DirectionalLight(0xffffff, 10);
+		// directionalLight.rotation.set(Math.PI / 4, 0, 0)
+		// directionalLight.position.set(5, 5, 5)
+		// const light = new THREE.AmbientLight(0x404040); // soft white light
+		// console.log(scene);
+		// camera = $$.r.n.perspectivecamera[0]
+		// render_func = (time) => {
+		// 	// console.log("render");
+		// 	$$.update({ time: time, count: Math.floor(time * 10) % 14 + 1 });
+		// 	scene.add(directionalLight);
+		// 	scene.add(light);
+		// }
+		// animate();
 
-		// console.log($$);
-		// console.log($$.r.n.number);
-		// $$.update({ test: false });
-		// console.log($$.r.n.number);
-		// $$.update({ number1: 101 });
-		// console.log($$.r.n.number);
-		// $$.update({ test: true });
+		console.log($$);
+		console.log($$.r.n.number);
+		$$.update({ test: false });
+		console.log($$.r.n.number);
+		$$.update({ number1: 101 });
+		console.log($$.r.n.number);
+		$$.update({ test: true });
 
 		// const time = Date.now();
 		// console.time("updating")

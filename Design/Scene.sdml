@@ -18,5 +18,5 @@
 		</for>
 	</scene>
 
-	<perspectivecamera pos="vec3(sin(time),cos(time), 5)" />
+	<perspectivecamera pos="vec3(0,0, 5)" />
 </template>
