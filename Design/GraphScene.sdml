@@ -9,7 +9,7 @@
 <template>
     <compute id="distance" float exp="10.0" />
 
-    <scene>
+    <scene rot="euler(0,time % TAU,0)">
         <for array="range(count)" iter="x">
             <for array="range(count)" iter="y">
                 <object3d pos="vec3(x * 1.5 - count / 2 * 1.5 + 0.75,0,y * 1.5 - count / 2 * 1.5 + 0.75)"
@@ -27,7 +27,7 @@
 
     <!-- <perspectivecamera pos="vec3(#distance.result * sin(time), 3, #distance.result * cos(time))"
         rot="euler(0, time, 0)" /> -->
-    <perspectivecamera pos="vec3(0,4.5,-20)" rot="euler(0, PI, 0)" fov="45" />
+    <perspectivecamera pos="vec3(0,5.5,-20)" rot="euler(0, PI, 0)" fov="45" />
 </template>
 <outputs>
 </outputs>
