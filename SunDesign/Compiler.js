@@ -733,14 +733,14 @@ class SDML_Component extends SDML_Node {
 }
 
 // SDML Compiler
-class SDML_Compile_Error extends Error {
+export class SDML_Compile_Error extends Error {
     constructor(msg) {
         super(msg);
         this.name = "SDML_Compile_Error";
     }
 }
 
-class SDML_Compile_Warning extends Error {
+export class SDML_Compile_Warning extends Error {
     constructor(msg) {
         super(msg);
         this.name = "SDML_Compile_Warning";
@@ -1454,13 +1454,13 @@ export class SDML_Compile_CodeGen {
             const [[c_layer = 0, c_mask = 0]] = node.bitmasks.get_Masks(['$children']);
             const children_test = children_masks.map(([layer, mask], idx, arr) => {
                 const len = arr.length === 1;
-                return `${len ? '' : '('}this.${node_name}.b[${layer}] & ${mask}${len ? '' : ')'}`;
+                return `${len ? '' : '('}this.b[${layer}] & ${mask}${len ? '' : ')'}`;
             });
             ans.push(`if (${if_test.join(" || ")}) {`,
                 // debug
-                // `	console.log(">> update ${node.name} uid: ${node.uid}");`,
                 `	// ${node.name} children : ${children} bitmasks : ${children_masks} children bitmask : ${c_layer},${c_mask}`,
                 ...(children_test.length === 0 || !node.auto_bitmasks ? [] : [`	if (${children_test.join(" || ")}) this.${node_name}.b[${c_layer}] |= ${c_mask};`]),
+                // `	console.log(">> update ${node.name} uid: ${node.uid}");`,
                 `	this.b[${n_layer}] |= ${n_mask} & (this.${node_name}.update(${this.get_NodeInputs(node)}, ${this.get_NodeChildren(node)}, ${this.get_NodeSlots(node)}) ? 2147483647 : 0);`,
                 `}`)
         }

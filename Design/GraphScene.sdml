@@ -1,0 +1,33 @@
+<refs>
+    <component id="block" url="./Design/Graph.sdml" />
+</refs>
+<inputs>
+    <number name="count" default="3" />
+    <float name="percent" default="1.0" />
+    <float name="time" default="0.0" />
+</inputs>
+<template>
+    <compute id="distance" float exp="10.0" />
+
+    <scene>
+        <for array="range(count)" iter="x">
+            <for array="range(count)" iter="y">
+                <object3d pos="vec3(x * 1.5 - count / 2 * 1.5 + 0.75,0,y * 1.5 - count / 2 * 1.5 + 0.75)"
+                    scale="vec3(0.5,1,0.5)">
+                    <collect number id="arr">
+                        <for array="range(x + y + 1)" iter="num2">
+                            <num n="num2+1" />
+                        </for>
+                    </collect>
+                    <block values="#arr.result" max_height="x+y+1" percent="percent" blue="(x+y+1)/(count*count)" />
+                </object3d>
+            </for>
+        </for>
+    </scene>
+
+    <!-- <perspectivecamera pos="vec3(#distance.result * sin(time), 3, #distance.result * cos(time))"
+        rot="euler(0, time, 0)" /> -->
+    <perspectivecamera pos="vec3(0,4.5,-20)" rot="euler(0, PI, 0)" fov="45" />
+</template>
+<outputs>
+</outputs>

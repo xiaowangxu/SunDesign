@@ -1,7 +1,7 @@
 import { ALL_INPUTS_TYPES, DepGraph, Types, Collection, ExpTypes, TypesManagerSingleton, BitMask } from '../../SunDesign/Core.js';
 import { parse_Constant, parse_Expression, test_IdentifierName, test_Number } from '../../SunDesign/Core.js';
 import { typeCheck } from '../../SunDesign/sPARks.js';
-import { SDML_Compile_CodeGen, create_Component } from '../../SunDesign/Compiler.js';
+import { SDML_Compile_CodeGen, create_Component, SDML_Compile_Error } from '../../SunDesign/Compiler.js';
 import { SDML_Compiler_Visitor } from '../../SunDesign/TagVisitor.js';
 import { registe_Tag } from '../../SunDesign/TagCollection.js';
 

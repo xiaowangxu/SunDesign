@@ -143,6 +143,18 @@ export const ALL_INPUTS_TYPES = {
         default: (val) => { return val },
         datatype: () => ExpTypes.base(ExpTypes.mat4)
     },
+    'int-arr': {
+        default: (val) => { return val },
+        datatype: () => ExpTypes.array(ExpTypes.base(ExpTypes.int)),
+    },
+    'float-arr': {
+        default: (val) => { return val },
+        datatype: () => ExpTypes.array(ExpTypes.base(ExpTypes.float)),
+    },
+    'number-arr': {
+        default: (val) => { return val },
+        datatype: () => ExpTypes.array(ExpTypes.base(ExpTypes.number)),
+    },
 }
 
 class DepGraphError {
@@ -317,8 +329,13 @@ export class Types {
         }
         else {
             const map = this.to_Map();
-            const keys = [...map.keys()];
-            for (let key in types.types) {
+            let keys = [...map.keys()];
+            const b_types = types.type_names;
+            b_types.sort((a, b) => {
+                if (a === b) return 0;
+                return TypesManagerSingleton.instance_of(b, a) ? 1 : -1;
+            });
+            for (let key of b_types) {
                 const mapped_keys = keys.map(t => {
                     return t === key || TypesManagerSingleton.instance_of(t, key);
                 });
@@ -342,6 +359,7 @@ export class Types {
                     const map_key = keys[idx];
                     if (i) map.delete(map_key);
                 })
+                keys = keys.filter((val, idx) => !mapped_keys[idx]);
                 // map.delete(key);
             }
             if (ext && map.size > 0) return false;
@@ -379,6 +397,22 @@ export class Types {
     static NONE = null;
     static IGNORE = Symbol("ignore all types");
 }
+
+// const a = new Types({ a: 1 });
+// const b = new Types({ b: Infinity, a: Infinity });
+// console.log(a.match_Types(b, true))
+// const a1 = new Types({ a: 1 });
+// const b1 = new Types({ b: 1, a: 1 });
+// console.log(a1.match_Types(b1, true))
+// const a2 = new Types({ a: 1 });
+// const b2 = new Types({ a: Infinity });
+// console.log(a2.match_Types(b2, true))
+// const a3 = new Types();
+// const b3 = new Types({ a: Infinity });
+// console.log(a3.match_Types(b3, true))
+// const a4 = new Types({ b: 1 });
+// const b4 = new Types({ a: Infinity });
+// console.log(a4.match_Types(b4, true))
 
 export class Collection {
     constructor() {

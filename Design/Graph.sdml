@@ -1,0 +1,46 @@
+<refs>
+</refs>
+<inputs>
+	<number-arr name="values" default="[1]" />
+	<number name="max_height" default="5.0" />
+	<float name="percent" default="1.0" />
+	<float name="blue" default="1.0" />
+</inputs>
+<template>
+	<cache number id="sum">
+		<add>
+			<for array="values" iter="num">
+				<num n="num" />
+			</for>
+		</add>
+	</cache>
+	<collect number id="percents">
+		<for array="values" index="idx" iter="num">
+			<if test="idx == 0" param:_idx="idx">
+				<num n="0" />
+				<else>
+					<add>
+						<for array="range(_idx)" index="subidx">
+							<num n="values[subidx]" />
+						</for>
+					</add>
+				</else>
+			</if>
+		</for>
+	</collect>
+	<object3d>
+		<for array="values" index="idx" iter="val" param:sum="#sum.result" param:percents="#percents.result">
+			<object3d pos="vec3(0, (percents[idx]/sum * max_height ) * percent, 0)"
+				scale="vec3(1,val/sum*max_height*percent,1)">
+				<mesh pos="vec3(0,0.5,0)">
+					<box-geo />
+					<material emissive="color(0,idx/values.size, blue)" />
+				</mesh>
+			</object3d>
+		</for>
+	</object3d>
+</template>
+<outputs>
+	<number name="sum" value="#sum.result" />
+	<number-arr name="percents" value="#percents.result" />
+</outputs>

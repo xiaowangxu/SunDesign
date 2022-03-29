@@ -3750,7 +3750,9 @@ export const SunDesignCodeGenPassVisitor = {
 	array_take: (val, opt, codegen) => {
 		return `${val[0]}[${val[1]}]`
 	},
-
+	getArraySize: (val, opt, codegen) => {
+		return `${val[0]}.length`
+	}
 }
 
 class CodeGenPass {
@@ -3785,7 +3787,10 @@ class CodeGenPass {
 	}
 
 	dot(ast, opt) {
-		return `${ast.func}(${this.walk(ast.sub[0], opt)})`;
+		if (SunDesignCodeGenPassVisitor[ast.func])
+			return SunDesignCodeGenPassVisitor[ast.func]([this.walk(ast.sub[0], opt)], opt, this);
+		else
+			return `${ast.func}(${this.walk(ast.sub[0], opt)})`;
 	}
 
 	uniop(ast, opt) {
