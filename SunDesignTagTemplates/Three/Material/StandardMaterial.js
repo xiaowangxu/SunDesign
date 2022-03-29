@@ -50,9 +50,6 @@ export const TAG_THREE_StandardMaterial_0 =
         if (this.b[0] & /* wireframe */ 32) {
             mat.wireframe = i.wireframe;
         }
-        if (this.b[0] & 63) {
-            mat.needsUpdate = true;
-        }
         return false;
     }
     dispose() {

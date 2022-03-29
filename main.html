@@ -105,9 +105,11 @@
 			// for (let i = 1; i <= count; i++)
 			// 	arr.push(i);
 			const percent = (time / 2 % 2);
+			// console.time("update")
 			$$.update({ count: 6, time: time, percent: percent > 1 ? 1 : percent });
-			scene.add(directionalLight);
-			scene.add(light);
+			// console.timeEnd("update")
+			// scene.add(directionalLight);
+			// scene.add(light);
 		}
 		animate();
 

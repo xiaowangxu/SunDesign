@@ -34,7 +34,7 @@
 				scale="vec3(1,val/sum*max_height*percent,1)">
 				<mesh pos="vec3(0,0.5,0)">
 					<box-geo />
-					<material emissive="color(0,idx/values.size, blue)" />
+					<material emissive="color(percent,idx/values.size, blue)" />
 				</mesh>
 			</object3d>
 		</for>

@@ -1,6 +1,6 @@
 import { ALL_INPUTS_TYPES, DepGraph, Types, Collection, ExpTypes, TypesManagerSingleton, BitMask } from './Core.js';
 import { parse_Constant, parse_Expression, test_IdentifierName, test_Number } from './Core.js';
-import { typeCheck } from './sPARks.js';
+import { typeCheck, typeToString } from './sPARks.js';
 import { SDML_Compile_CodeGen, create_Component, SDML_Compile_Error } from './Compiler.js';
 import { registe_Tag } from './TagCollection.js';
 
