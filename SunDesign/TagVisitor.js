@@ -851,7 +851,7 @@ class SDML_For extends SDML_Compiler_Visitor {
 
 class SDML_Slot extends SDML_Compiler_Visitor {
     constructor(scope, name, id, parent, ast) {
-        super(scope, name, id, parent, ast);
+        super(scope, name, id, parent, ast, {}, [], false);
         this.slotname = ast.attributes.name;
         if (this.slotname === undefined) {
             throw new SDML_Compile_Error(`in node <for id="${this.id}"/> it requires a 'iter' parameter like: <for array="..." iter="parameter"/> where parameter is a valid identifier name`);
@@ -897,7 +897,10 @@ class SDML_Slot extends SDML_Compiler_Visitor {
 
     get_CustomUpdate(codegen, nodename) {
         const [[layer, mask]] = codegen.bitmasks.get_Masks([codegen.get_MaskedName(codegen.get_NodeCache(this))]);
-        return [`this.b[${layer}] |= ${mask};`, `this.${nodename} = s.${this.slotname};`];
+        return [`if (s.${this.slotname} !== null) {`,
+        `   this.b[${layer}] |= ${mask};`,
+        `   this.${nodename} = s.${this.slotname};`,
+            `}`,];
     }
 
     get_CustomDispose(nodename) {

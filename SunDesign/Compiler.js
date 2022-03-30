@@ -1297,7 +1297,7 @@ export class SDML_Compile_CodeGen {
             if (custom_init !== null)
                 ans.push(`this.${this.get_NodeCache(node)} = ${custom_init};`)
             else
-                ans.push(`this.${this.get_NodeCache(node)} = new ${obj_name}(${this.get_NodeInputs(node)}, ${this.get_NodeChildren(node)}, ${this.get_NodeSlots(node)});`)
+                ans.push(`this.${this.get_NodeCache(node)} = new ${obj_name}(${this.get_NodeInputs(node)}, ${this.get_NodeChildren(node)}, ${this.get_NodeSlots(node, true)});`)
         }
         return ans;
     }
@@ -1367,21 +1367,32 @@ export class SDML_Compile_CodeGen {
         return `{${arr.join(', ')}}`;
     }
 
-    get_NodeSlots(node) {
+    get_NodeSlots(node, init = false) {
         const slots_template = node.get_NodeSlots(this);
         const arr = [];
         for (const param in slots_template) {
+            const refs_nodes = new Set();
             const params = slots_template[param];
             const types_arr = [];
             for (const type in params) {
                 const subs_arr = params[type].map(subs => {
                     const { node, type: subtype } = subs;
                     const node_name = this.get_NodeCache(node);
+                    refs_nodes.add(node_name);
                     return `...this.${node_name}.r.n.${subtype}`;
                 })
+
                 types_arr.push(`${type}: [${subs_arr.join(', ')}]`);
             }
-            arr.push(`${param}: {${types_arr.join(', ')}}`)
+            const bitmasks = this.bitmasks.get_Masks([...refs_nodes].map(n => this.get_MaskedName(n)));
+            const bitmask_test = bitmasks.map(([layer, mask], idx, arr) => {
+                const len = arr.length === 1;
+                return `${len ? '' : '('}this.b[${layer}] & /* ${[...refs_nodes]} */ ${mask}${len ? '' : ')'}`;
+            });
+            if (init)
+                arr.push(`${param}: {${types_arr.join(', ')}}`);
+            else
+                arr.push(`${param}: (${bitmask_test.join(" || ")}) ? {${types_arr.join(', ')}} : null`);
         }
         return `{${arr.join(', ')}}`;
     }
