@@ -1,0 +1,24 @@
+<flags />
+<refs>
+	<component id="box" url="./Design/Box.sdml" />
+</refs>
+<inputs>
+	<float name="time" default="0.0" />
+</inputs>
+<template>
+	<scene>
+		<mesh pos="vec3(0,1.5,0)">
+			<box />
+			<material emissive="color(1,0,0)" />
+		</mesh>
+		<mesh pos="vec3(0,0,0)">
+			<box />
+			<material emissive="color(0,1,0)" />
+		</mesh>
+		<mesh pos="vec3(0,-1.5,0)">
+			<box />
+			<material emissive="color(0,0,1)" />
+		</mesh>
+	</scene>
+	<perspectivecamera pos="vec3(5 * sin(time), 0, 5 * cos(time))" rot="euler(0, time, 0)" />
+</template>

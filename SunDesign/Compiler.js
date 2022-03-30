@@ -259,7 +259,7 @@ export class ResourceLoader {
         this.env = env;
     }
 
-    load(url) {
+    load(url, ast) {
         return Promise.resolve(null);
     }
 }
@@ -269,7 +269,7 @@ export class ComponentWebLoader extends ResourceLoader {
         super(env);
     }
 
-    async load(url) {
+    async load(url, ast) {
         const str = await new Promise((resolve, reject) => {
             const request = new XMLHttpRequest();
             request.open('get', url);
@@ -349,10 +349,10 @@ export class Environment {
         this.promises.push(promise);
     }
 
-    load(loader, url) {
+    load(loader, url, ast) {
         if (this.caches[url] !== undefined) return Promise.resolve();
         this.caches[url] = null;
-        const promise = this.loaders[loader].load(url).then((component) => {
+        const promise = this.loaders[loader].load(url, ast).then((component) => {
             this.caches[url] = component;
             if (component instanceof SDML_Node) {
                 component.compile();
@@ -434,6 +434,7 @@ class SDML_Component extends SDML_Node {
         super(env);
         this.url = url;
         this.xmlast = {
+            flags: true,
             refs: null,
             inputs: null,
             outputs: null,
@@ -442,6 +443,9 @@ class SDML_Component extends SDML_Node {
             template: null,
             export: null,
         };
+        this.flags = {
+            static: false,
+        };
         this.sdml = sdml;
         this.urlmap = {};
         this.slots = {};
@@ -449,16 +453,25 @@ class SDML_Component extends SDML_Node {
         this.types = null;
         this.onready = onready;
         this.onreject = onreject;
-        this.parse_XML(sdml);
-        this.pre_Compile();
-        this.collect_Resources();
+        try {
+            this.parse_XML(sdml);
+            this.pre_Compile();
+            this.collect_Resources();
+        }
+        catch (err) {
+            console.log(err);
+            throw new Error(`${err.message}\nin ${this.url}`);
+        }
     }
 
-    set_Ast(type, ast) {
+    set_Ast(type, ast, self) {
         if (this.xmlast[type] === undefined) {
             throw new Error(`entry <${type}/> is not allowed in '${this.url}'`);
         }
-        if (this.xmlast[type] === null) {
+        if (this.xmlast[type] === true) {
+            this.xmlast[type] = self;
+        }
+        else if (this.xmlast[type] === null) {
             this.xmlast[type] = ast;
         }
         else {
@@ -472,7 +485,7 @@ class SDML_Component extends SDML_Node {
             throw new Error(`${xmlparser.error}`);
         }
         for (let i of xmlparser.result) {
-            this.set_Ast(i.tagName, i.children);
+            this.set_Ast(i.tagName, i.children, i);
         }
     }
 
@@ -488,7 +501,7 @@ class SDML_Component extends SDML_Node {
             if (id in this.urlmap) throw new Error(`duplicate SDML Component's sub Resource id '${id}' found in\n<refs>\n\t<${ref.tagName} id="${id}" />\n</refs>\nin ${this.url}`);
             const url = ref.attributes.url;
             this.urlmap[id] = url;
-            promises.push(this.env.load(ref.tagName, url))
+            promises.push(this.env.load(ref.tagName, url, ref))
         })
         Promise.all(promises).then(() => {
             this.onready(this);
@@ -503,6 +516,13 @@ class SDML_Component extends SDML_Node {
 
     pre_Compile() {
         // console.log(`>>>>> '${this.url}' pre compile`);
+        // flags
+        if (this.xmlast.flags !== true)
+            for (const flag in this.flags) {
+                const data = this.xmlast.flags.attributes[flag];
+                if (data !== undefined) this.flags[flag] = data ?? true;
+            }
+
         // inputs
         const inputs = this.xmlast.inputs ?? [];
         for (let i of inputs) {
@@ -548,6 +568,10 @@ class SDML_Component extends SDML_Node {
                 throw new Error(`input's type '${type}' in\n<inputs>\n\t<${type} name="${name}"/>\n</inputs>\nis invalid in ${this.url}`);
             }
         }
+        if (this.flags.static) {
+            if (Object.keys(this.inputs).length > 0) throw new Error(`a static component does not allow usage of inputs:\n<inputs>\n${inputs.map(i => `    <${i.tagName} name="${i.attributes.name}"/>`).join("\n")}\n</inputs>\nwhen <flags static/>`);
+        }
+
         // outputs
         const outputs = this.xmlast.outputs ?? [];
         for (let i of outputs) {
@@ -615,6 +639,9 @@ class SDML_Component extends SDML_Node {
     }
 
     compile() {
+        //flags
+        let class_name = this.class_name
+        if (this.flags.static) class_name = `component_StaticComponent_${this.uid}`;
         // template types
         if (this.xmlast.type === null) {
             // self check
@@ -673,9 +700,12 @@ class SDML_Component extends SDML_Node {
             render_Graph(mermaid).then(svg => {
                 console.log(`Graph Preview: ${this.url}\n\t%c %c`, `border: black 1px solid; background: url("data:image/svg+xml;base64,${btoa(svg)}") no-repeat center; padding: 180px 280px; background-size: contain;`, "");
             })
-            const codegen = new SDML_Compile_CodeGen(this.env, this.class_name, this.compile_res, this.env.opt);
+            const codegen = new SDML_Compile_CodeGen(this.env, class_name, this.compile_res, this.env.opt);
             const code = codegen.generate();
-            this.env.add_Template(this.class_name, code);
+            this.env.add_Template(class_name, code);
+            if (this.flags.static) {
+                this.env.add_Template(this.class_name, `const ${this.class_name} = new ${class_name}();`);
+            }
         }
         catch (err) {
             console.log(err);

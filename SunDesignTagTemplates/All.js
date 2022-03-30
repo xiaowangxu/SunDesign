@@ -12,4 +12,5 @@ import './Three/Object3D.js';
 import './Three/Scene.js';
 import './Three/Mesh.js';
 import './Three/Geometry/BoxGeometry.js';
+import './Three/Geometry/SphereGeometry.js';
 import './Three/Material/StandardMaterial.js';

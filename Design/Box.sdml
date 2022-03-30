@@ -1,0 +1,8 @@
+<flags static />
+<refs>
+</refs>
+<inputs>
+</inputs>
+<template>
+	<sphere-geo r="0.5"/>
+</template>

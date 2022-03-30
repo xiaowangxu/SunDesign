@@ -963,7 +963,14 @@ export class SDML_ComponentNode extends SDML_Compiler_Visitor {
     }
 
     get_NewNode(codegen) {
-        return `component_Component_${this.component.uid}`;
+        return this.component.class_name;
+    }
+
+    get_CustomInit(nodename, type) {
+        if (this.component.flags.static) {
+            return this.component.class_name;
+        }
+        return null;
     }
 
     get_NodeSlots(codegen) {

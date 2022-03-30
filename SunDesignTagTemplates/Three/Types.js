@@ -79,6 +79,36 @@ TypesManagerSingleton.extends('geometry', 'boxgeometry', {
         default: '1'
     },
 });
+TypesManagerSingleton.extends('geometry', 'spheregeometry', {
+    r: {
+        datatype: ExpTypes.base(ExpTypes.number),
+        default: '1'
+    },
+    hs: {
+        datatype: ExpTypes.base(ExpTypes.number),
+        default: '16'
+    },
+    ds: {
+        datatype: ExpTypes.base(ExpTypes.number),
+        default: '16'
+    },
+    ps: {
+        datatype: ExpTypes.base(ExpTypes.number),
+        default: '0'
+    },
+    pe: {
+        datatype: ExpTypes.base(ExpTypes.number),
+        default: 'TAU'
+    },
+    ts: {
+        datatype: ExpTypes.base(ExpTypes.number),
+        default: '0'
+    },
+    te: {
+        datatype: ExpTypes.base(ExpTypes.number),
+        default: 'TAU'
+    },
+});
 TypesManagerSingleton.extends(null, 'material', {
 });
 TypesManagerSingleton.extends('material', 'standardmaterial', {
