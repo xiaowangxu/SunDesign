@@ -1410,7 +1410,6 @@ export class SDML_Compile_CodeGen {
 
         const params = this.params.get(node);
         // param update
-        // console.log(params);
         const param_updates = [];
         for (const param in params) {
             if (this.opt.inline_contanst_exp && node.params[param].opt.constant) continue;
@@ -1443,11 +1442,11 @@ export class SDML_Compile_CodeGen {
                     `}`)
             }
         }
-        // console.log(param_updates.join('\n'));
+        // console.log(node.name, param_updates.join('\n'));
         ans.push(...param_updates);
 
         // param init
-        const masked_params = Object.entries(params).filter(([name, cachename]) => !this.opt.inline_contanst_exp || !node.params[name].opt.constant).map(([n, c]) => c).map(i => this.get_MaskedName(i));
+        const masked_params = param_updates.length === 0 ? [] : Object.entries(params).filter(([name, cachename]) => !this.opt.inline_contanst_exp || !node.params[name].opt.constant).map(([n, c]) => c).map(i => this.get_MaskedName(i));
         const params_templates = node.get_ScopedInputs(this);
         const children_template = node.get_NodeChildren(this);
         const slots_template = node.get_NodeSlots(this);
@@ -1486,9 +1485,10 @@ export class SDML_Compile_CodeGen {
         const ans = [`let $changed = false;`];
         for (const node of this.scope.order) {
             // console.log(node);
-            if (node.auto_bitmasks)
+            const node_update = this.get_NodeUpdate(node);
+            if (node.auto_bitmasks && node_update.length > 0)
                 ans.push(`this.${this.get_NodeCache(node)}.b = ${node.bitmasks.get_EmptyArrayString()};`)
-            ans.push(...this.get_NodeUpdate(node));
+            ans.push(...node_update);
         }
         // update result
         for (const output in this.scope.outputs) {
